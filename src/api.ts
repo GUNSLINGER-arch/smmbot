@@ -117,8 +117,13 @@ export function setBackendUrl(url: string) {
 async function httpFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   let url = endpoint;
   const baseUrl = getBackendUrl();
+  const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
   if (baseUrl && !endpoint.startsWith('http')) {
-    url = `${baseUrl}${endpoint}`;
+    if (isHttpsPage && baseUrl.startsWith('http://')) {
+      url = endpoint;
+    } else {
+      url = `${baseUrl}${endpoint}`;
+    }
   }
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
