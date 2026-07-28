@@ -6,9 +6,10 @@
   "type": "commonjs",
   "scripts": {
     "dev": "concurrently \"vite --port 5173\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build": "tsc && vite build",
     "build:frontend": "tsc && vite build",
     "build:electron": "electron-packager . SMMBot --platform=win32 --arch=x64 --out=dist-electron --overwrite --ignore=\"^/src\" --ignore=\"^/dist-electron\" --ignore=\"^/smmbot-tauri\" --ignore=\"\\.spec$\" --ignore=\"^/vite\\.config\" --ignore=\"^/tsconfig\"",
-    "build": "npm run build:frontend && npm run build:electron"
+    "build:all": "npm run build && npm run build:electron"
   },
   "dependencies": {
     "axios": "^1.6.2",
