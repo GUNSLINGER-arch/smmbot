@@ -802,7 +802,11 @@ function startServer() {
           }
 
           if (pathname === '/api/video/metrics' || pathname === '/api/fetch_metadata') {
-            const meta = await fetchLiveMetadata(data.url, data.platform);
+            const targetUrl = data.url || data.link || data.target || (data.payload && data.payload.url) || '';
+            const targetPlatform = data.platform || (data.payload && data.payload.platform) || 'TikTok';
+            logMsg(`🔍 API Scrape Request for URL: ${targetUrl} [${targetPlatform}]`, 'info');
+            const meta = await fetchLiveMetadata(targetUrl, targetPlatform);
+            logMsg(`📊 API Scrape Result: ${JSON.stringify(meta)}`, 'info');
             res.end(JSON.stringify({ ok: true, meta }));
             return;
           }
