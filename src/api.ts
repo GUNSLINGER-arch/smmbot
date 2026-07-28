@@ -107,7 +107,7 @@ export interface MetaResult {
 export function getBackendUrl(): string {
   const saved = localStorage.getItem('smmbot_backend_url');
   if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
-  return 'http://127.0.0.1:7860';
+  return 'http://74.162.122.198:7860';
 }
 
 export function setBackendUrl(url: string) {
