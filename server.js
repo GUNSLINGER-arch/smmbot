@@ -303,11 +303,11 @@ function getPythonExecutablePath() {
   return 'python3';
 }
 
-function fetchPythonMetadata(url, platform) {
+function fetchPythonMetadata(url, platform, forcedProxy = null) {
   return new Promise((resolve) => {
     const scraperPath = path.join(__dirname, 'scraper.py');
     const pyPath = getPythonExecutablePath();
-    const activeProxy = getProxy() || '';
+    const activeProxy = forcedProxy || getProxy() || '';
 
     exec(`"${pyPath}" "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1) => {
       if (!error1) {
@@ -337,7 +337,11 @@ function fetchPythonMetadata(url, platform) {
 }
 
 async function fetchLiveMetadata(url, platform) {
-  let pyMeta = await fetchPythonMetadata(url, platform);
+  let proxy = getProxy();
+  if (!proxy) {
+    proxy = await findWorkingProxy();
+  }
+  let pyMeta = await fetchPythonMetadata(url, platform, proxy);
 
   if (!pyMeta) {
     pyMeta = { title: '', author: '', views: null, likes: null, comments: null, shares: null, saves: null, source: 'js-fallback' };
