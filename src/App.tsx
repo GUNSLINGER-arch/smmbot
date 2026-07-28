@@ -1256,8 +1256,92 @@ function HeaderBar() {
 // ─────────────────────────────────────────────────────────────────
 //  MAIN APP
 // ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+//  ADMIN AUTH GATEWAY
+// ─────────────────────────────────────────────────────────────────
+const ADMIN_PASS = 'Gaming_786@';
+
+function AdminAuthModal({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === ADMIN_PASS) {
+      localStorage.setItem('smmbot_admin_authed', 'true');
+      onAuthenticated();
+    } else {
+      setError(true);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: '#0a0a0f', zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '20px'
+    }}>
+      <div className="term-card glass-card--glow" style={{
+        width: '100%', maxWidth: '400px', padding: '32px 24px',
+        textAlign: 'center', background: 'rgba(17,17,24,0.85)'
+      }}>
+        <div className="brand-badge" style={{ width: '48px', height: '48px', margin: '0 auto 16px', fontSize: '22px' }}>S</div>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>SMMBot Control Room</h2>
+        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '24px' }}>Enter Admin Password to access workspace</p>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPass ? 'text' : 'password'}
+              className="term-input"
+              placeholder="Admin Password..."
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(false); }}
+              autoFocus
+              style={{
+                borderColor: error ? 'var(--error)' : undefined,
+                boxShadow: error ? '0 0 0 3px rgba(239,68,68,0.2)' : undefined
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass(!showPass)}
+              style={{
+                position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', color: 'var(--text-secondary)',
+                cursor: 'pointer', fontSize: '13px'
+              }}
+            >
+              {showPass ? 'HIDE' : 'SHOW'}
+            </button>
+          </div>
+
+          {error && (
+            <div style={{ color: 'var(--error)', fontSize: '12px', fontWeight: 600 }}>
+              Access Denied — Incorrect Password
+            </div>
+          )}
+
+          <button type="submit" className="term-btn term-btn-cyan" style={{ width: '100%', padding: '12px', fontSize: '14px' }}>
+            Unlock Dashboard
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'dispatch' | 'services' | 'logs' | 'config'>('campaigns');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('smmbot_admin_authed') === 'true';
+  });
+
+  if (!isAuthenticated) {
+    return <AdminAuthModal onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <AppProvider>
