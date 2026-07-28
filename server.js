@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const axios = require('axios');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const { v4: uuidv4 } = require('uuid');
@@ -309,8 +309,8 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
     const pyPath = getPythonExecutablePath();
     const activeProxy = forcedProxy || getProxy() || '';
 
-    exec(`"${pyPath}" "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1) => {
-      if (!error1) {
+    execFile(pyPath, [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1) => {
+      if (!error1 && stdout1) {
         try {
           const info = JSON.parse(stdout1.trim());
           if (info && (info.title || info.views !== undefined)) {
@@ -320,8 +320,8 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
         } catch (e) {}
       }
 
-      exec(`python "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
-        if (!error2) {
+      execFile('python', [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
+        if (!error2 && stdout2) {
           try {
             const info = JSON.parse(stdout2.trim());
             if (info && (info.title || info.views !== undefined)) {
