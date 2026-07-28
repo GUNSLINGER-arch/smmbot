@@ -644,11 +644,11 @@ function CampaignsTab() {
                   <div><strong>{meta.title}</strong></div>
                   <div style={{ color: 'var(--text-secondary)' }}>@{meta.author}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(34,197,94,0.2)' }}>
-                    <div>Views: <strong>{meta.views ? fmtNumber(meta.views) : 'N/A'}</strong></div>
-                    <div>Likes: <strong>{meta.likes ? fmtNumber(meta.likes) : 'N/A'}</strong></div>
-                    <div>Comments: <strong>{meta.comments ? fmtNumber(meta.comments) : 'N/A'}</strong></div>
-                    <div>Shares: <strong>{meta.shares ? fmtNumber(meta.shares) : 'N/A'}</strong></div>
-                    <div>Saves: <strong>{meta.saves ? fmtNumber(meta.saves) : 'N/A'}</strong></div>
+                    <div>Views: <strong>{meta.views !== null && meta.views !== undefined ? fmtNumber(meta.views) : 'N/A'}</strong></div>
+                    <div>Likes: <strong>{meta.likes !== null && meta.likes !== undefined ? fmtNumber(meta.likes) : 'N/A'}</strong></div>
+                    <div>Comments: <strong>{meta.comments !== null && meta.comments !== undefined ? fmtNumber(meta.comments) : 'N/A'}</strong></div>
+                    <div>Shares: <strong>{meta.shares !== null && meta.shares !== undefined ? fmtNumber(meta.shares) : 'N/A'}</strong></div>
+                    <div>Saves: <strong>{meta.saves !== null && meta.saves !== undefined ? fmtNumber(meta.saves) : 'N/A'}</strong></div>
                   </div>
                 </div>
               )}
