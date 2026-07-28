@@ -36,13 +36,19 @@ function loadState() {
   try {
     if (fs.existsSync(stateFile)) {
       const raw = fs.readFileSync(stateFile, 'utf8');
-      const parsed = JSON.parse(raw);
-      state = { ...state, ...parsed };
-      if (!state.api_url || state.api_url.includes('smmpanelpak')) {
-        state.api_url = 'https://marketerum.com/api/v2';
+      try {
+        const parsed = JSON.parse(raw);
+        state = { ...state, ...parsed };
+        if (!state.api_url || state.api_url.includes('smmpanelpak')) {
+          state.api_url = 'https://marketerum.com/api/v2';
+        }
+        if (!state.order_history) state.order_history = [];
+        if (!state.services) state.services = [];
+      } catch (parseErr) {
+        console.error('State JSON file corrupted! Backing up corrupted file...', parseErr);
+        const backupFile = path.join(stateDir, `smmbot_state_corrupted_${Date.now()}.json`);
+        fs.renameSync(stateFile, backupFile);
       }
-      if (!state.order_history) state.order_history = [];
-      if (!state.services) state.services = [];
     }
   } catch (e) {
     console.error('Failed to load state', e);
@@ -54,7 +60,9 @@ function saveState() {
     if (!fs.existsSync(stateDir)) {
       fs.mkdirSync(stateDir, { recursive: true });
     }
-    fs.writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
+    const tempFile = path.join(stateDir, `smmbot_state_${Date.now()}_${Math.random().toString(36).slice(2)}.tmp`);
+    fs.writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
+    fs.renameSync(tempFile, stateFile);
   } catch (e) {
     console.error('Failed to save state', e);
   }
@@ -301,7 +309,7 @@ function fetchPythonMetadata(url, platform) {
     const pyPath = getPythonExecutablePath();
     const activeProxy = getProxy() || '';
 
-    exec(`"${pyPath}" "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000 }, (error1, stdout1) => {
+    exec(`"${pyPath}" "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1) => {
       if (!error1) {
         try {
           const info = JSON.parse(stdout1.trim());
@@ -312,7 +320,7 @@ function fetchPythonMetadata(url, platform) {
         } catch (e) {}
       }
 
-      exec(`python "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000 }, (error2, stdout2) => {
+      exec(`python "${scraperPath}" "${url}" "${platform}" "${activeProxy}"`, { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
         if (!error2) {
           try {
             const info = JSON.parse(stdout2.trim());
@@ -435,6 +443,7 @@ async function runDripWorker(url, abortSignal) {
     if (abortSignal.aborted) {
       logMsg(`⏹ Campaign stopped: ${titleDisplay}`, 'warn', url);
       camp.status = 'Stopped';
+      activeWorkers.delete(url);
       saveState();
       broadcastEvent('campaign_update', url);
       return;
@@ -446,7 +455,10 @@ async function runDripWorker(url, abortSignal) {
       if (currentHour < 12 || currentHour > 23) {
         logMsg(`🌙 Peak-Hours Mode active — sleeping until peak window (12PM - 11PM)`, 'info', url);
         for (let s = 0; s < 1800; s++) {
-          if (abortSignal.aborted) return;
+          if (abortSignal.aborted) {
+            activeWorkers.delete(url);
+            return;
+          }
           await new Promise(r => setTimeout(r, 1000));
         }
         continue;
@@ -457,30 +469,34 @@ async function runDripWorker(url, abortSignal) {
     // 2-HOUR STUCK ORDER CHECK & AUTOMATIC PANEL CANCEL + CAMPAIGN HALT
     // ─────────────────────────────────────────────────────────────────
     if (camp.last_view_order && camp.last_order_timestamp) {
-      const elapsedMs = Date.now() - new Date(camp.last_order_timestamp).getTime();
-      const twoHoursMs = 2 * 60 * 60 * 1000;
+      const ts = new Date(camp.last_order_timestamp).getTime();
+      if (!isNaN(ts)) {
+        const elapsedMs = Date.now() - ts;
+        const twoHoursMs = 2 * 60 * 60 * 1000;
 
-      if (elapsedMs >= twoHoursMs) {
-        try {
-          const status = await smmCheckOrder(camp.last_view_order);
-          logMsg(`🔍 Checking status for order #${camp.last_view_order} (Age: ${(elapsedMs / 3600000).toFixed(1)}h) → Panel Status: [${status}]`, 'info', url);
+        if (elapsedMs >= twoHoursMs) {
+          try {
+            const status = await smmCheckOrder(camp.last_view_order);
+            logMsg(`🔍 Checking status for order #${camp.last_view_order} (Age: ${(elapsedMs / 3600000).toFixed(1)}h) → Panel Status: [${status}]`, 'info', url);
 
-          if (status === 'Pending' || status === 'In progress' || status === 'Processing') {
-            logMsg(`⚠️ Order #${camp.last_view_order} stuck in status [${status}] for >2 hours! Sending cancel request to SMM Panel and stopping campaign...`, 'warn', url);
-            try {
-              await smmCancelOrder(camp.last_view_order);
-              logMsg(`🚫 Sent API cancel request for order #${camp.last_view_order} to Marketerum panel`, 'warn', url);
-            } catch (err) {
-              logMsg(`⚠️ Panel cancel API notice: ${err.message}`, 'warn', url);
+            if (status === 'Pending' || status === 'In progress' || status === 'Processing') {
+              logMsg(`⚠️ Order #${camp.last_view_order} stuck in status [${status}] for >2 hours! Sending cancel request to SMM Panel and stopping campaign...`, 'warn', url);
+              try {
+                await smmCancelOrder(camp.last_view_order);
+                logMsg(`🚫 Sent API cancel request for order #${camp.last_view_order} to Marketerum panel`, 'warn', url);
+              } catch (err) {
+                logMsg(`⚠️ Panel cancel API notice: ${err.message}`, 'warn', url);
+              }
+              camp.last_view_order = null;
+              camp.status = 'Stopped';
+              activeWorkers.delete(url);
+              saveState();
+              broadcastEvent('campaign_update', url);
+              return;
             }
-            camp.last_view_order = null;
-            camp.status = 'Stopped';
-            saveState();
-            broadcastEvent('campaign_update', url);
-            return;
+          } catch (err) {
+            logMsg(`⚠️ Could not check order status for #${camp.last_view_order}: ${err.message}`, 'warn', url);
           }
-        } catch (err) {
-          logMsg(`⚠️ Could not check order status for #${camp.last_view_order}: ${err.message}`, 'warn', url);
         }
       }
     }
@@ -490,6 +506,7 @@ async function runDripWorker(url, abortSignal) {
     if (camp.views_delivered >= camp.total_views) {
       logMsg(`🎉 Campaign COMPLETED: ${titleDisplay}`, 'success', url);
       camp.status = 'Completed';
+      activeWorkers.delete(url);
       saveState();
       broadcastEvent('campaign_complete', url);
       return;
