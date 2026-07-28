@@ -5,6 +5,7 @@ import os
 import urllib.request
 import urllib.parse
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Redirect stderr to devnull so library errors (yt-dlp/instaloader) never pollute stdout
 sys.stderr = open(os.devnull, 'w')
@@ -47,8 +48,21 @@ def extract_from_dict(d, keys):
                         return res
     return None
 
+def check_single_proxy(p):
+    proxy_str = f"socks5://{p}"
+    try:
+        handler = urllib.request.ProxyHandler({'http': proxy_str, 'https': proxy_str})
+        opener = urllib.request.build_opener(handler)
+        test_req = urllib.request.Request('https://api.ipify.org?format=json', headers={'User-Agent': 'Mozilla/5.0'})
+        with opener.open(test_req, timeout=1.5) as tr:
+            if tr.status == 200:
+                return proxy_str
+    except Exception:
+        pass
+    return None
+
 def fetch_fast_proxy():
-    """Fetch working SOCKS5 proxy to bypass datacenter IP block on VPS."""
+    """Fetch working SOCKS5 proxy in parallel (<1.0s) to bypass datacenter IP blocks."""
     list_urls = [
         'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt',
         'https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt'
@@ -56,20 +70,16 @@ def fetch_fast_proxy():
     for lurl in list_urls:
         try:
             req = urllib.request.Request(lurl, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=3) as resp:
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
                 lines = [p.strip() for p in resp.read().decode('utf-8', errors='ignore').split('\n') if p.strip()]
-                sample = random.sample(lines, min(25, len(lines)))
-                for p in sample:
-                    proxy_str = f"socks5://{p}"
-                    try:
-                        handler = urllib.request.ProxyHandler({'http': proxy_str, 'https': proxy_str})
-                        opener = urllib.request.build_opener(handler)
-                        test_req = urllib.request.Request('https://api.ipify.org?format=json', headers={'User-Agent': 'Mozilla/5.0'})
-                        with opener.open(test_req, timeout=1.8) as tr:
-                            if tr.status == 200:
-                                return proxy_str
-                    except Exception:
-                        continue
+                sample = random.sample(lines, min(30, len(lines)))
+                
+                with ThreadPoolExecutor(max_workers=15) as executor:
+                    futures = [executor.submit(check_single_proxy, p) for p in sample]
+                    for future in as_completed(futures):
+                        res = future.result()
+                        if res:
+                            return res
         except Exception:
             continue
     return None
@@ -86,12 +96,12 @@ def fetch_html_direct(url, proxy_url=None):
         try:
             proxy_handler = urllib.request.ProxyHandler({'http': proxy_url, 'https': proxy_url})
             opener = urllib.request.build_opener(proxy_handler)
-            with opener.open(req, timeout=12) as response:
+            with opener.open(req, timeout=8) as response:
                 return response.read().decode('utf-8', errors='ignore')
         except Exception:
             pass
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=6) as response:
             return response.read().decode('utf-8', errors='ignore')
     except Exception:
         return ""
@@ -171,10 +181,6 @@ def main():
     url = sys.argv[1]
     platform = sys.argv[2]
     proxy_url = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
-    
-    # Auto-fetch proxy if none provided or if proxy_url is empty
-    if not proxy_url or proxy_url.strip() == "" or proxy_url == "null":
-        proxy_url = fetch_fast_proxy()
 
     meta = {
         'title': '',
@@ -192,7 +198,7 @@ def main():
         if "tiktok.com" in url or platform == "TikTok":
             oe_url = f"https://www.tiktok.com/oembed?url={urllib.parse.quote(url)}"
             req = urllib.request.Request(oe_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=5) as res:
+            with urllib.request.urlopen(req, timeout=4) as res:
                 oe_data = json.loads(res.read().decode('utf-8'))
                 if oe_data.get('title'):
                     meta['title'] = oe_data.get('title', '')
@@ -266,7 +272,7 @@ def main():
                 def warning(self, msg): pass
                 def error(self, msg): pass
 
-            opts = {'quiet': True, 'no_warnings': True, 'logger': QuietLogger(), 'skip_download': True}
+            opts = {'quiet': True, 'no_warnings': True, 'logger': QuietLogger(), 'skip_download': True, 'socket_timeout': 10}
             if proxy_url:
                 opts['proxy'] = proxy_url
 
