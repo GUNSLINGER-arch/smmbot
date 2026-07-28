@@ -1,7 +1,14 @@
 import sys
+import os
+import glob
+
+# Guarantee updated 2026 yt-dlp package from ~/.local/ is loaded first
+for ls in glob.glob(os.path.expanduser('~/.local/lib/python*/site-packages')):
+    if os.path.exists(ls) and ls not in sys.path:
+        sys.path.insert(0, ls)
+
 import json
 import re
-import os
 import urllib.request
 import urllib.parse
 
