@@ -620,10 +620,12 @@ function CampaignsTab() {
                 <div style={{ padding: '12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '10px', fontSize: '12px' }}>
                   <div><strong>{meta.title}</strong></div>
                   <div style={{ color: 'var(--text-secondary)' }}>@{meta.author}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(34,197,94,0.2)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(34,197,94,0.2)' }}>
                     <div>Views: <strong>{meta.views ? fmtNumber(meta.views) : 'N/A'}</strong></div>
                     <div>Likes: <strong>{meta.likes ? fmtNumber(meta.likes) : 'N/A'}</strong></div>
                     <div>Comments: <strong>{meta.comments ? fmtNumber(meta.comments) : 'N/A'}</strong></div>
+                    <div>Shares: <strong>{meta.shares ? fmtNumber(meta.shares) : 'N/A'}</strong></div>
+                    <div>Saves: <strong>{meta.saves ? fmtNumber(meta.saves) : 'N/A'}</strong></div>
                   </div>
                 </div>
               )}
