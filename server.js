@@ -361,9 +361,17 @@ async function fetchLiveMetadata(url, platform) {
     } catch (e) {}
   }
 
-  const cleanId = url.split('/')[-1] ? url.split('/').filter(Boolean).pop().split('?')[0] : 'post';
-  const title = (pyMeta.title && pyMeta.title.trim()) ? pyMeta.title.trim() : `${platform || 'Social'} Video (${cleanId})`;
-  const author = (pyMeta.author && pyMeta.author.trim()) ? pyMeta.author.trim() : 'creator';
+  let cleanId = 'post';
+  if (url && typeof url === 'string') {
+    try {
+      const parts = url.split('/').filter(Boolean);
+      if (parts.length > 0) {
+        cleanId = parts[parts.length - 1].split('?')[0];
+      }
+    } catch (e) {}
+  }
+  const title = (pyMeta.title && String(pyMeta.title).trim()) ? String(pyMeta.title).trim() : `${platform || 'Social'} Video (${cleanId})`;
+  const author = (pyMeta.author && String(pyMeta.author).trim()) ? String(pyMeta.author).trim() : 'creator';
 
   const views = pyMeta.views !== null ? parseInt(pyMeta.views) : 0;
   const likes = pyMeta.likes !== null ? parseInt(pyMeta.likes) : Math.max(0, Math.floor(views * 0.028));
