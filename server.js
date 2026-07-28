@@ -300,6 +300,7 @@ async function smmPlaceOrderWithRetry(serviceId, url, qty, typeLabel, maxAttempt
 // ─────────────────────────────────────────────────────────────────
 function getPythonExecutablePath() {
   if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH;
+  if (fs.existsSync('/usr/bin/python3')) return '/usr/bin/python3';
   return 'python3';
 }
 
@@ -309,7 +310,10 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
     const pyPath = getPythonExecutablePath();
     const activeProxy = forcedProxy || getProxy() || '';
 
-    execFile(pyPath, [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1) => {
+    execFile(pyPath, [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1, stderr1) => {
+      if (error1) {
+        logMsg(`⚠️ execFile error (${pyPath}): ${error1.message}`, 'error');
+      }
       if (!error1 && stdout1) {
         try {
           const info = JSON.parse(stdout1.trim());
@@ -317,10 +321,12 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
             resolve(info);
             return;
           }
-        } catch (e) {}
+        } catch (e) {
+          logMsg(`⚠️ JSON parse error on stdout: ${stdout1}`, 'error');
+        }
       }
 
-      execFile('python', [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
+      execFile('python3', [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
         if (!error2 && stdout2) {
           try {
             const info = JSON.parse(stdout2.trim());
