@@ -1,0 +1,6 @@
+node_modules
+dist-electron
+.temp
+*.log
+smmbot_state.json
+.DS_Store

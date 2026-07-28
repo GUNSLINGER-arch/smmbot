@@ -1,0 +1,269 @@
+{
+  "total_files": 13,
+  "ipc_channels": [],
+  "rest_endpoints": [
+    "/",
+    "/api/add_service",
+    "/api/analytics",
+    "/api/balance",
+    "/api/campaign/cancel_stuck_order_cmd",
+    "/api/campaign/delete",
+    "/api/campaign/launch",
+    "/api/campaign/refill",
+    "/api/campaign/resume",
+    "/api/campaign/stop",
+    "/api/campaigns",
+    "/api/cancel_stuck_order_cmd",
+    "/api/check_order",
+    "/api/clear_order_history",
+    "/api/clear_proxy",
+    "/api/config",
+    "/api/delete_campaign",
+    "/api/delete_service",
+    "/api/events",
+    "/api/export_logs_csv",
+    "/api/export_services_csv",
+    "/api/fetch_metadata",
+    "/api/get_analytics",
+    "/api/get_balance",
+    "/api/get_campaigns",
+    "/api/get_config",
+    "/api/get_logs",
+    "/api/get_order_history",
+    "/api/get_services",
+    "/api/health",
+    "/api/launch_campaign",
+    "/api/logs",
+    "/api/multi_status",
+    "/api/order/check",
+    "/api/order/drip",
+    "/api/order/multi_status",
+    "/api/order/place",
+    "/api/order_history",
+    "/api/place_drip_order",
+    "/api/place_order",
+    "/api/recalculate_service_prices",
+    "/api/refill",
+    "/api/resume_campaign",
+    "/api/save_config",
+    "/api/scan_proxy",
+    "/api/service/add",
+    "/api/service/delete",
+    "/api/services",
+    "/api/state",
+    "/api/stop_campaign",
+    "/api/verify_api_key",
+    "/api/verify_key",
+    "/api/video/metrics"
+  ],
+  "api_methods": [
+    "addService",
+    "addToast",
+    "callback",
+    "cancelStuckOrder",
+    "checkOrder",
+    "clearOrderHistory",
+    "clearProxy",
+    "deleteCampaign",
+    "deleteService",
+    "editCampaign",
+    "exportLogsCsv",
+    "exportServicesCsv",
+    "fetchMetadata",
+    "getAnalytics",
+    "getBalance",
+    "getCampaigns",
+    "getConfig",
+    "getLogs",
+    "getOrderHistory",
+    "getRefillStatus",
+    "getServices",
+    "launchCampaign",
+    "multiStatus",
+    "on",
+    "onAdded",
+    "onCampaignComplete",
+    "onCampaignUpdate",
+    "onClose",
+    "onEdit",
+    "onLaunched",
+    "onLog",
+    "onRefresh",
+    "onUpdated",
+    "placeDripOrder",
+    "placeOrder",
+    "recalculateServicePrices",
+    "refillOrder",
+    "refreshBalance",
+    "refreshCampaigns",
+    "refreshData",
+    "refreshServices",
+    "resumeCampaign",
+    "saveConfig",
+    "scanProxy",
+    "stopCampaign",
+    "verifyApiKey",
+    "windowClose",
+    "windowMaximize",
+    "windowMinimize"
+  ],
+  "state_properties": [],
+  "ui_components": [
+    "AddServiceModal",
+    "AnalyticsSpark",
+    "App",
+    "AppProvider",
+    "CampaignCard",
+    "CampaignLogPanel",
+    "CampaignsPage",
+    "CampaignsTab",
+    "ConfigTab",
+    "Dashboard",
+    "DirectOrderPage",
+    "DispatchTab",
+    "EditModal",
+    "LaunchModal",
+    "LogsPage",
+    "LogsTab",
+    "OrderHistoryPanel",
+    "ProgBar",
+    "ProgressRing",
+    "QuickOrderModal",
+    "Services",
+    "ServicesTab",
+    "Settings",
+    "SettingsPage",
+    "StatusBadge"
+  ],
+  "stealth_ratios": {},
+  "file_details": {
+    "main.js": {
+      "lines": 848,
+      "bytes": 32715,
+      "ipc_count": 0,
+      "route_count": 53,
+      "components": []
+    },
+    "server.js": {
+      "lines": 848,
+      "bytes": 32715,
+      "ipc_count": 0,
+      "route_count": 53,
+      "components": []
+    },
+    "scraper.py": {
+      "lines": 117,
+      "bytes": 4479,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": []
+    },
+    "src/api.ts": {
+      "lines": 330,
+      "bytes": 11776,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": []
+    },
+    "src/AppContext.tsx": {
+      "lines": 145,
+      "bytes": 4572,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "AppProvider"
+      ]
+    },
+    "src/App.tsx": {
+      "lines": 969,
+      "bytes": 48946,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "ProgBar",
+        "CampaignLogPanel",
+        "ConfigTab",
+        "ServicesTab",
+        "LogsTab",
+        "DispatchTab",
+        "CampaignsTab",
+        "AnalyticsSpark",
+        "App"
+      ]
+    },
+    "src/pages/Dashboard.tsx": {
+      "lines": 1320,
+      "bytes": 62077,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "ProgBar",
+        "CampaignLogPanel",
+        "CampaignCard",
+        "ProgressRing",
+        "Dashboard",
+        "StatusBadge",
+        "EditModal",
+        "AnalyticsSpark",
+        "LaunchModal",
+        "QuickOrderModal"
+      ]
+    },
+    "src/pages/Services.tsx": {
+      "lines": 298,
+      "bytes": 12177,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "Services",
+        "OrderHistoryPanel",
+        "AddServiceModal"
+      ]
+    },
+    "src/pages/Settings.tsx": {
+      "lines": 230,
+      "bytes": 10103,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "Settings"
+      ]
+    },
+    "src/pages/CampaignsPage.tsx": {
+      "lines": 321,
+      "bytes": 14755,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "CampaignsPage"
+      ]
+    },
+    "src/pages/DirectOrderPage.tsx": {
+      "lines": 174,
+      "bytes": 6432,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "DirectOrderPage"
+      ]
+    },
+    "src/pages/LogsPage.tsx": {
+      "lines": 137,
+      "bytes": 5179,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "LogsPage"
+      ]
+    },
+    "src/pages/SettingsPage.tsx": {
+      "lines": 184,
+      "bytes": 6439,
+      "ipc_count": 0,
+      "route_count": 0,
+      "components": [
+        "SettingsPage"
+      ]
+    }
+  }
+}

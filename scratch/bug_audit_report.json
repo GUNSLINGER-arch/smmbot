@@ -1,0 +1,75 @@
+{
+  "infinite_loops_risk": [],
+  "unhandled_promises": [
+    {
+      "file": "src/AppContext.tsx",
+      "line": 82,
+      "code": "const refreshData = useCallback(async () => {"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 364,
+      "code": "const handleStop = async (url: string) => { await api.stopCampaign(url); refresh"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 365,
+      "code": "const handleResume = async (url: string) => { await api.resumeCampaign(url); ref"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 366,
+      "code": "const handleDelete = async (url: string) => { await api.deleteCampaign(url); ref"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 367,
+      "code": "const handleCancelStuck = async (url: string) => { await api.cancelStuckOrder(ur"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 368,
+      "code": "const handleRefill = async (url: string) => { await api.refillOrder(url); addToa"
+    }
+  ],
+  "null_deref_risks": [
+    {
+      "file": "server.js",
+      "line": 452,
+      "code": "logMsg(`\ud83d\udd0d Checking status for order #${camp.last_view_order} (Age: ${(elapsedMs / 3600000).toFixed(1)}h) \u2192 Panel Status: [${status}]`, 'info', url);"
+    },
+    {
+      "file": "main.js",
+      "line": 452,
+      "code": "logMsg(`\ud83d\udd0d Checking status for order #${camp.last_view_order} (Age: ${(elapsedMs / 3600000).toFixed(1)}h) \u2192 Panel Status: [${status}]`, 'info', url);"
+    },
+    {
+      "file": "src/api.ts",
+      "line": 294,
+      "code": "if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';"
+    },
+    {
+      "file": "src/api.ts",
+      "line": 295,
+      "code": "if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 31,
+      "code": "{value.toFixed(0)}%"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 696,
+      "code": "TOTAL COST: PKR {expenseBreakdown.totalPkr.toFixed(2)} (${expenseBreakdown.totalUsd.toFixed(4)})"
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 792,
+      "code": "PKR {costPkr.toFixed(2)} <span style={{ fontSize: '11px', color: 'var(--term-muted)' }}>(${costUsd.toFixed(4)})</span>"
+    }
+  ],
+  "state_mutation_risks": [],
+  "type_mismatches": [],
+  "summary": []
+}

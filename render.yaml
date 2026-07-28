@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: smmbot-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 7860
+      - key: MARKETERUM_API_KEY
+        sync: false
