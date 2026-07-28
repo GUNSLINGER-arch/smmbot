@@ -5,6 +5,9 @@ import os
 import urllib.request
 import urllib.parse
 
+# Redirect stderr to devnull so library errors (yt-dlp/instaloader) never pollute stdout
+sys.stderr = open(os.devnull, 'w')
+
 def parse_count(s):
     if not s: return 0
     s = str(s).replace(',', '').strip().upper()
@@ -224,57 +227,36 @@ def main():
         except Exception:
             pass
 
-    # Tier 3: yt-dlp multi-browser & direct fallback
+    # Tier 3: Clean yt-dlp fallback (no browser database locks)
     if meta.get('views') is None or meta.get('likes') is None or not meta.get('title'):
         try:
             import yt_dlp
-            opts = {'quiet': True, 'no_warnings': True, 'skip_download': True}
+            class QuietLogger:
+                def debug(self, msg): pass
+                def warning(self, msg): pass
+                def error(self, msg): pass
+
+            opts = {'quiet': True, 'no_warnings': True, 'logger': QuietLogger(), 'skip_download': True}
             if proxy_url:
                 opts['proxy'] = proxy_url
 
-            browsers = ['edge', 'chrome', 'firefox', 'brave', 'chromium']
-            for browser in browsers:
-                try:
-                    opts_cookie = {**opts, 'cookiesfrombrowser': (browser,)}
-                    with yt_dlp.YoutubeDL(opts_cookie) as ydl:
-                        info = ydl.extract_info(url, download=False)
-                    if info and info.get('title'):
-                        saves_val = (
-                            info.get('collect_count') or info.get('bookmark_count') or
-                            info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
-                        )
-                        meta.update({
-                            'title': meta.get('title') or info.get('title', ''),
-                            'author': meta.get('author') or info.get('uploader') or info.get('channel', ''),
-                            'views': meta.get('views') if meta.get('views') is not None else info.get('view_count'),
-                            'likes': meta.get('likes') if meta.get('likes') is not None else info.get('like_count'),
-                            'comments': meta.get('comments') if meta.get('comments') is not None else info.get('comment_count'),
-                            'shares': meta.get('shares') if meta.get('shares') is not None else (info.get('repost_count') or info.get('share_count')),
-                            'saves': meta.get('saves') if meta.get('saves') is not None else saves_val,
-                            'source': f'yt-dlp ({browser})'
-                        })
-                        break
-                except Exception:
-                    continue
-
-            if meta.get('views') is None or not meta.get('title'):
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                if info and info.get('title'):
-                    saves_val = (
-                        info.get('collect_count') or info.get('bookmark_count') or
-                        info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
-                    )
-                    meta.update({
-                        'title': meta.get('title') or info.get('title', ''),
-                        'author': meta.get('author') or info.get('uploader') or info.get('channel', ''),
-                        'views': meta.get('views') if meta.get('views') is not None else info.get('view_count'),
-                        'likes': meta.get('likes') if meta.get('likes') is not None else info.get('like_count'),
-                        'comments': meta.get('comments') if meta.get('comments') is not None else info.get('comment_count'),
-                        'shares': meta.get('shares') if meta.get('shares') is not None else (info.get('repost_count') or info.get('share_count')),
-                        'saves': meta.get('saves') if meta.get('saves') is not None else saves_val,
-                        'source': 'yt-dlp'
-                    })
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            if info and info.get('title'):
+                saves_val = (
+                    info.get('collect_count') or info.get('bookmark_count') or
+                    info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
+                )
+                meta.update({
+                    'title': meta.get('title') or info.get('title', ''),
+                    'author': meta.get('author') or info.get('uploader') or info.get('channel', ''),
+                    'views': meta.get('views') if meta.get('views') is not None else info.get('view_count'),
+                    'likes': meta.get('likes') if meta.get('likes') is not None else info.get('like_count'),
+                    'comments': meta.get('comments') if meta.get('comments') is not None else info.get('comment_count'),
+                    'shares': meta.get('shares') if meta.get('shares') is not None else (info.get('repost_count') or info.get('share_count')),
+                    'saves': meta.get('saves') if meta.get('saves') is not None else saves_val,
+                    'source': 'yt-dlp'
+                })
         except Exception:
             pass
 
