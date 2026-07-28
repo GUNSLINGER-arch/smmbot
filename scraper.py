@@ -21,6 +21,14 @@ def parse_count(s):
     except:
         return 0
 
+def extract_saves(info):
+    """Try multiple keys that different platforms use for saves/bookmarks/collects."""
+    for key in ['collect_count', 'digg_count', 'bookmark_count', 'save_count', 'favourites_count', 'favorite_count']:
+        val = info.get(key)
+        if val is not None and val != 0:
+            return val
+    return None
+
 def main():
     if len(sys.argv) < 3:
         print(json.dumps({"error": "Missing args"}))
@@ -59,12 +67,19 @@ def main():
             if m:
                 shortcode = m.group(1)
                 post = instaloader.Post.from_shortcode(L.context, shortcode)
+                # Try to get saves from raw JSON node data
+                saves_count = None
+                try:
+                    node = post._node if hasattr(post, '_node') else {}
+                    saves_count = node.get('saved_count') or node.get('bookmark_count') or node.get('save_count')
+                except:
+                    pass
                 meta = {
                     "views": post.video_view_count if post.is_video else None,
                     "likes": post.likes,
                     "comments": post.comments,
                     "shares": getattr(post, 'share_count', None),
-                    "saves": None,
+                    "saves": saves_count,
                     "title": (post.caption or '').split('\n')[0][:120],
                     "author": post.owner_username,
                     "source": "instaloader"
@@ -72,7 +87,7 @@ def main():
         except Exception as e:
             pass
  
-    # Try yt-dlp fallback for both TikTok and Instagram (Scrapes Views, Likes, Comments, Shares, Saves)
+    # Try yt-dlp fallback for both TikTok and Instagram
     if not meta.get("title"):
         try:
             import yt_dlp
@@ -94,7 +109,7 @@ def main():
                             'likes': info.get('like_count'),
                             'comments': info.get('comment_count'),
                             'shares': info.get('repost_count') or info.get('share_count'),
-                            'saves': info.get('bookmark_count') or info.get('save_count'),
+                            'saves': extract_saves(info),
                             'source': f'yt-dlp ({browser})'
                         }
                         break
@@ -112,7 +127,7 @@ def main():
                         'likes': info.get('like_count'),
                         'comments': info.get('comment_count'),
                         'shares': info.get('repost_count') or info.get('share_count'),
-                        'saves': info.get('bookmark_count') or info.get('save_count'),
+                        'saves': extract_saves(info),
                         'source': 'yt-dlp'
                     }
         except Exception as e:
@@ -122,3 +137,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
