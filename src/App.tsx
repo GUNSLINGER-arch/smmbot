@@ -569,7 +569,7 @@ function CampaignsTab() {
 
             <div className="term-section-box">
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '12px' }}>Service Routing</div>
-              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">View Service</label>
                   <select className="term-input" value={editForm.view_service} onChange={e => setEditForm({ ...editForm, view_service: e.target.value })}>
@@ -580,6 +580,29 @@ function CampaignsTab() {
                 <div className="term-field-group">
                   <label className="term-field-lbl">Like Service</label>
                   <select className="term-input" value={editForm.like_service} onChange={e => setEditForm({ ...editForm, like_service: e.target.value })}>
+                    <option value="">Select...</option>
+                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div className="term-field-group">
+                  <label className="term-field-lbl">Comment SVC</label>
+                  <select className="term-input" value={editForm.comment_service} onChange={e => setEditForm({ ...editForm, comment_service: e.target.value })}>
+                    <option value="">Select...</option>
+                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                  </select>
+                </div>
+                <div className="term-field-group">
+                  <label className="term-field-lbl">Share SVC</label>
+                  <select className="term-input" value={editForm.share_service} onChange={e => setEditForm({ ...editForm, share_service: e.target.value })}>
+                    <option value="">Select...</option>
+                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                  </select>
+                </div>
+                <div className="term-field-group">
+                  <label className="term-field-lbl">Save SVC</label>
+                  <select className="term-input" value={editForm.save_service} onChange={e => setEditForm({ ...editForm, save_service: e.target.value })}>
                     <option value="">Select...</option>
                     {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
                   </select>
