@@ -902,6 +902,43 @@ function startServer() {
             return;
           }
 
+          if (pathname === '/api/campaign/edit' || pathname === '/api/edit_campaign') {
+            const { url, payload } = data;
+            const camp = state.campaigns[url];
+            if (camp) {
+              if (payload.total_views !== undefined) camp.total_views = parseInt(payload.total_views);
+              if (payload.days_to_run !== undefined) camp.days_to_run = parseFloat(payload.days_to_run);
+              if (payload.engagement_rate !== undefined) camp.engagement_rate = parseFloat(payload.engagement_rate);
+              if (payload.view_service !== undefined) camp.view_service = payload.view_service;
+              if (payload.like_service !== undefined) camp.like_service = payload.like_service;
+              if (payload.comment_service !== undefined) camp.comment_service = payload.comment_service;
+              if (payload.share_service !== undefined) camp.share_service = payload.share_service;
+              if (payload.save_service !== undefined) camp.save_service = payload.save_service;
+              if (payload.peak_only !== undefined) camp.peak_only = Boolean(payload.peak_only);
+              saveState();
+              logMsg(`✏️ Campaign updated for ${url.slice(-25)}`, 'info', url);
+              broadcastEvent('campaign_update', url);
+              res.end(JSON.stringify({ ok: true }));
+            } else {
+              res.end(JSON.stringify({ ok: false, error: 'Campaign not found' }));
+            }
+            return;
+          }
+
+          if (pathname === '/api/export_services_csv') {
+            const rows = ['ID,Service_ID,Name,Rate_USD,Rate_PKR,Min,Max'];
+            state.services.forEach(s => rows.push(`"${s.id}","${s.service_id}","${s.name}",${s.rate_usd},${s.rate_pkr},${s.min_order},${s.max_order}`));
+            res.end(JSON.stringify({ csv: rows.join('\n') }));
+            return;
+          }
+
+          if (pathname === '/api/export_logs_csv') {
+            const rows = ['Timestamp,Level,Message,URL'];
+            state.logs.forEach(l => rows.push(`"${l.timestamp}","${l.level}","${l.message.replace(/"/g, '""')}","${l.url || ''}"`));
+            res.end(JSON.stringify({ csv: rows.join('\n') }));
+            return;
+          }
+
           if (pathname === '/api/campaign/delete' || pathname === '/api/delete_campaign') {
             const controller = activeWorkers.get(data.url);
             if (controller) { controller.abort(); activeWorkers.delete(data.url); }
