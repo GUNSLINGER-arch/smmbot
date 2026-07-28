@@ -308,12 +308,9 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
   return new Promise((resolve) => {
     const scraperPath = path.join(__dirname, 'scraper.py');
     const pyPath = getPythonExecutablePath();
-    const activeProxy = forcedProxy || getProxy() || '';
+    const activeProxy = forcedProxy !== null ? forcedProxy : (getProxy() || '');
 
-    execFile(pyPath, [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1, stderr1) => {
-      if (error1) {
-        logMsg(`⚠️ execFile error (${pyPath}): ${error1.message}`, 'error');
-      }
+    execFile(pyPath, [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error1, stdout1) => {
       if (!error1 && stdout1) {
         try {
           const info = JSON.parse(stdout1.trim());
@@ -321,12 +318,11 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
             resolve(info);
             return;
           }
-        } catch (e) {
-          logMsg(`⚠️ JSON parse error on stdout: ${stdout1}`, 'error');
-        }
+        } catch (e) {}
       }
 
-      execFile('python3', [scraperPath, url, platform, activeProxy], { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
+      // Retry without proxy if active proxy failed/timed out
+      execFile(pyPath, [scraperPath, url, platform, ''], { timeout: 25000, killSignal: 'SIGKILL' }, (error2, stdout2) => {
         if (!error2 && stdout2) {
           try {
             const info = JSON.parse(stdout2.trim());
