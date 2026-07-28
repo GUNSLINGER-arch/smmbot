@@ -116,19 +116,21 @@ function getProxy() {
   return null;
 }
 
-function getRequestConfig(customHeaders = {}) {
-  const proxy = getProxy();
+function getRequestConfig(customHeaders = {}, useProxy = false) {
   const config = {
     headers: {
       'User-Agent': getRandomUserAgent(),
       'Accept-Language': 'en-US,en;q=0.9',
       ...customHeaders,
     },
-    timeout: 15000,
+    timeout: 5000,
   };
-  if (proxy) {
-    config.httpsAgent = new SocksProxyAgent(proxy);
-    config.httpAgent  = new SocksProxyAgent(proxy);
+  if (useProxy) {
+    const proxy = getProxy();
+    if (proxy) {
+      config.httpsAgent = new SocksProxyAgent(proxy);
+      config.httpAgent  = new SocksProxyAgent(proxy);
+    }
   }
   return config;
 }
@@ -137,7 +139,7 @@ async function findWorkingProxy() {
   logMsg('[AutoProxy] Scanning free SOCKS5 list...', 'info');
   try {
     const listUrl = 'https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt';
-    const res = await axios.get(listUrl, { timeout: 10000 });
+    const res = await axios.get(listUrl, { timeout: 5000 });
     const proxies = res.data.split('\n').map(p => p.trim()).filter(Boolean);
     logMsg(`[AutoProxy] Loaded ${proxies.length} proxies`, 'info');
 
@@ -149,7 +151,7 @@ async function findWorkingProxy() {
         await axios.get('https://api.ipify.org?format=json', {
           httpAgent: agent,
           httpsAgent: agent,
-          timeout: 4000
+          timeout: 2500
         });
         logMsg(`[AutoProxy] Found working proxy: ${proxyStr}`, 'success');
         state.auto_proxy = proxyStr;
@@ -169,21 +171,33 @@ async function findWorkingProxy() {
 // ─────────────────────────────────────────────────────────────────
 //  MARKETERUM SMM PANEL API
 // ─────────────────────────────────────────────────────────────────
+let cachedBalance = null;
+let cachedBalanceTime = 0;
+
 async function smmApiCall(action, params = {}, customKey = null, customUrl = null) {
   const key = customKey || state.api_key;
   const url = customUrl || state.api_url || 'https://marketerum.com/api/v2';
   if (!key) throw new Error('API key is empty. Please enter and save your Marketerum API key in Settings.');
 
   const payload = new URLSearchParams({ key, action, ...params });
-  const cfg = getRequestConfig({ 'Content-Type': 'application/x-www-form-urlencoded' });
+  const cfg = getRequestConfig({ 'Content-Type': 'application/x-www-form-urlencoded' }, false);
   const res = await axios.post(url, payload.toString(), cfg);
   return res.data;
 }
 
 async function smmGetBalance(customKey = null, customUrl = null) {
+  const now = Date.now();
+  if (!customKey && cachedBalance && (now - cachedBalanceTime < 10000)) {
+    return cachedBalance;
+  }
   const data = await smmApiCall('balance', {}, customKey, customUrl);
   if (data.error) throw new Error(data.error);
-  return { balance: parseFloat(data.balance || 0), currency: data.currency || 'USD' };
+  const result = { balance: parseFloat(data.balance || 0), currency: data.currency || 'USD' };
+  if (!customKey) {
+    cachedBalance = result;
+    cachedBalanceTime = now;
+  }
+  return result;
 }
 
 async function smmGetServices() {
