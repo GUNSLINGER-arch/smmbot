@@ -337,11 +337,7 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
 }
 
 async function fetchLiveMetadata(url, platform) {
-  let proxy = getProxy();
-  if (!proxy) {
-    proxy = await findWorkingProxy();
-  }
-  let pyMeta = await fetchPythonMetadata(url, platform, proxy);
+  let pyMeta = await fetchPythonMetadata(url, platform, getProxy());
 
   if (!pyMeta) {
     pyMeta = { title: '', author: '', views: null, likes: null, comments: null, shares: null, saves: null, source: 'js-fallback' };
