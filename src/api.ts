@@ -118,13 +118,16 @@ async function httpFetch<T>(endpoint: string, options: RequestInit = {}): Promis
   let url = endpoint;
   const baseUrl = getBackendUrl();
   const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  if (baseUrl && !endpoint.startsWith('http')) {
+
+  if (!endpoint.startsWith('http')) {
     if (isHttpsPage && baseUrl.startsWith('http://')) {
+      // Use relative endpoint so Vercel HTTPS rewrites /api/... to VPS http://... seamlessly
       url = endpoint;
-    } else {
+    } else if (baseUrl) {
       url = `${baseUrl}${endpoint}`;
     }
   }
+
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
