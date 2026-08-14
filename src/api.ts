@@ -246,7 +246,9 @@ export const api = {
 
   // Services
   getServices:              () => invoke<SavedService[]>('get_services'),
-  addService:               (service_id: string, name: string) => invoke<SavedService & { error?: string }>('add_service', { service_id, name }),
+  lookupService:            (service_id: string) => invoke<{ ok: boolean; found?: any; error?: string }>('lookup_service', { service_id }),
+  syncServices:             () => invoke<{ ok: boolean; updated?: number; error?: string }>('sync_services'),
+  addService:               (service_id: string, name?: string) => invoke<SavedService & { error?: string }>('add_service', { service_id, name }),
   deleteService:            (id: string) => invoke('delete_service', { id }),
   recalculateServicePrices: () => invoke('recalculate_service_prices'),
   exportServicesCsv:        () => invoke<{ csv: string }>('export_services_csv'),

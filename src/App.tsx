@@ -574,14 +574,22 @@ function CampaignsTab() {
                   <label className="term-field-lbl">View Service</label>
                   <select className="term-input" value={editForm.view_service} onChange={e => setEditForm({ ...editForm, view_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Like Service</label>
                   <select className="term-input" value={editForm.like_service} onChange={e => setEditForm({ ...editForm, like_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -590,21 +598,33 @@ function CampaignsTab() {
                   <label className="term-field-lbl">Comment SVC</label>
                   <select className="term-input" value={editForm.comment_service} onChange={e => setEditForm({ ...editForm, comment_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Share SVC</label>
                   <select className="term-input" value={editForm.share_service} onChange={e => setEditForm({ ...editForm, share_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Save SVC</label>
                   <select className="term-input" value={editForm.save_service} onChange={e => setEditForm({ ...editForm, save_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -694,14 +714,22 @@ function CampaignsTab() {
                   <label className="term-field-lbl">View Service *</label>
                   <select className="term-input" value={form.view_service} onChange={e => setForm({ ...form, view_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Like Service</label>
                   <select className="term-input" value={form.like_service} onChange={e => setForm({ ...form, like_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -710,21 +738,33 @@ function CampaignsTab() {
                   <label className="term-field-lbl">Comment SVC</label>
                   <select className="term-input" value={form.comment_service} onChange={e => setForm({ ...form, comment_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Share SVC</label>
                   <select className="term-input" value={form.share_service} onChange={e => setForm({ ...form, share_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Save SVC</label>
                   <select className="term-input" value={form.save_service} onChange={e => setForm({ ...form, save_service: e.target.value })}>
                     <option value="">Select...</option>
-                    {services.map(s => <option key={s.id} value={s.service_id}>[{s.service_id}] {s.name}</option>)}
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -809,7 +849,7 @@ function DispatchTab() {
             <option value="">Select service...</option>
             {services.map(s => (
               <option key={s.id} value={s.service_id}>
-                [{s.service_id}] {s.name} — PKR {s.rate_pkr?.toFixed(1)}/k
+                [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'} (PKR {s.rate_pkr?.toFixed(1)}/k)
               </option>
             ))}
           </select>
@@ -820,7 +860,9 @@ function DispatchTab() {
         </div>
         <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
           <div className="term-field-group">
-            <label className="term-field-lbl">Qty / Run</label>
+            <label className="term-field-lbl">
+              Qty / Run {selectedService?.min_order ? `(Min: ${selectedService.min_order.toLocaleString()})` : ''}
+            </label>
             <input className="term-input" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} />
           </div>
           <div className="term-field-group">
@@ -833,10 +875,18 @@ function DispatchTab() {
           </div>
         </div>
 
+        {selectedService && qtyNum < (selectedService.min_order || 1) && (
+          <div style={{ padding: '8px 12px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px', color: 'var(--warning)', fontSize: '11px', marginBottom: '12px' }}>
+            ⚠️ Entered quantity ({qtyNum.toLocaleString()}) is below panel minimum order requirement of <strong>{selectedService.min_order?.toLocaleString()}</strong>!
+          </div>
+        )}
+
         {selectedService && (
           <div style={{ padding: '14px', background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '12px', margin: '14px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '2px' }}>Calculated Cost</div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '2px' }}>
+                Calculated Cost — Min Order: {selectedService.min_order?.toLocaleString() || 1}
+              </div>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>
                 PKR {costPkr.toFixed(2)} <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(${costUsd.toFixed(4)})</span>
               </div>
@@ -867,6 +917,9 @@ function ServicesTab() {
   const [newSvcId, setNewSvcId] = useState('');
   const [newSvcName, setNewSvcName] = useState('');
   const [adding, setAdding] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [previewSvc, setPreviewSvc] = useState<any>(null);
   const [history, setHistory] = useState<OrderHistoryItem[]>([]);
 
   const loadHistory = async () => {
@@ -878,15 +931,59 @@ function ServicesTab() {
 
   useEffect(() => { loadHistory(); }, []);
 
+  const handleLookup = async (idToLook: string) => {
+    const cleanId = idToLook.trim();
+    if (!cleanId) return;
+    setLookingUp(true);
+    try {
+      const res = await api.lookupService(cleanId);
+      if (res.ok && res.found) {
+        setPreviewSvc(res.found);
+        if (!newSvcName.trim()) {
+          setNewSvcName(res.found.name);
+        }
+        addToast(`Found: ${res.found.name} (Min: ${res.found.min_order?.toLocaleString()})`, 'info');
+      } else {
+        setPreviewSvc(null);
+      }
+    } catch {
+      setPreviewSvc(null);
+    }
+    setLookingUp(false);
+  };
+
   const handleAddSvc = async () => {
-    if (!newSvcId.trim() || !newSvcName.trim()) { addToast('ID and Name required', 'info'); return; }
+    if (!newSvcId.trim()) { addToast('Service ID required', 'info'); return; }
     setAdding(true);
     try {
       const res = await api.addService(newSvcId.trim(), newSvcName.trim());
       if (res.error) { addToast(res.error, 'error'); }
-      else { addToast(`Service #${newSvcId} added`, 'success'); setNewSvcId(''); setNewSvcName(''); refreshServices(); }
+      else {
+        addToast(`Service #${newSvcId} registered (Min: ${res.min_order?.toLocaleString() || 1})`, 'success');
+        setNewSvcId('');
+        setNewSvcName('');
+        setPreviewSvc(null);
+        refreshServices();
+      }
     } catch (e) { addToast('Error adding service', 'error'); }
     setAdding(false);
+  };
+
+  const handleSyncFromPanel = async () => {
+    setSyncing(true);
+    addToast('Syncing services with SMM panel...', 'info');
+    try {
+      const res = await api.syncServices();
+      if (res.ok) {
+        addToast(`Synced ${res.updated || 0} services with panel minimums & rates`, 'success');
+        refreshServices();
+      } else {
+        addToast(res.error || 'Sync failed', 'error');
+      }
+    } catch {
+      addToast('Sync failed', 'error');
+    }
+    setSyncing(false);
   };
 
   const handleDeleteSvc = async (id: string) => {
@@ -927,8 +1024,11 @@ function ServicesTab() {
     <div>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>Registered Services</div>
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>Registered Panel Services</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button className="term-btn term-btn-cyan term-btn-sm" onClick={handleSyncFromPanel} disabled={syncing}>
+            {syncing ? 'Syncing...' : '🔄 Sync Panel Mins & Rates'}
+          </button>
           <button className="term-btn term-btn-sm" onClick={handleRecalculatePrices}>Recalculate PKR</button>
           <button className="term-btn term-btn-sm" onClick={handleExportCsv}>Export CSV</button>
         </div>
@@ -937,19 +1037,63 @@ function ServicesTab() {
       {/* Add Service Card */}
       <div className="term-card">
         <div className="term-card-header">
-          <span className="term-card-title">Register New Service</span>
+          <span className="term-card-title">Register New Service from Panel</span>
         </div>
-        <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '120px 1fr auto', gap: '10px', alignItems: 'end' }}>
+        <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '140px 1fr auto auto', gap: '10px', alignItems: 'end' }}>
           <div className="term-field-group" style={{ marginBottom: 0 }}>
-            <label className="term-field-lbl">ID</label>
-            <input className="term-input" placeholder="Service ID" value={newSvcId} onChange={e => setNewSvcId(e.target.value)} />
+            <label className="term-field-lbl">Service ID</label>
+            <input
+              className="term-input"
+              placeholder="e.g. 1042"
+              value={newSvcId}
+              onChange={e => {
+                setNewSvcId(e.target.value);
+                if (previewSvc && previewSvc.service_id !== e.target.value.trim()) setPreviewSvc(null);
+              }}
+              onBlur={() => { if (newSvcId.trim() && !previewSvc) handleLookup(newSvcId); }}
+            />
           </div>
           <div className="term-field-group" style={{ marginBottom: 0 }}>
-            <label className="term-field-lbl">Name</label>
-            <input className="term-input" placeholder="Service name" value={newSvcName} onChange={e => setNewSvcName(e.target.value)} />
+            <label className="term-field-lbl">Custom Name (Optional)</label>
+            <input
+              className="term-input"
+              placeholder={previewSvc ? previewSvc.name : "Auto-fetches from panel if blank"}
+              value={newSvcName}
+              onChange={e => setNewSvcName(e.target.value)}
+            />
           </div>
-          <button className="term-btn term-btn-green term-btn-sm" onClick={handleAddSvc} disabled={adding} style={{ marginBottom: 0 }}>{adding ? 'Adding...' : '+ Add'}</button>
+          <button
+            className="term-btn term-btn-sm"
+            onClick={() => handleLookup(newSvcId)}
+            disabled={lookingUp || !newSvcId.trim()}
+            style={{ marginBottom: 0 }}
+          >
+            {lookingUp ? 'Fetching...' : '🔍 Fetch Panel Details'}
+          </button>
+          <button
+            className="term-btn term-btn-green term-btn-sm"
+            onClick={handleAddSvc}
+            disabled={adding || !newSvcId.trim()}
+            style={{ marginBottom: 0 }}
+          >
+            {adding ? 'Adding...' : '+ Add Service'}
+          </button>
         </div>
+
+        {/* Live Panel Service Preview Box */}
+        {previewSvc && (
+          <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(0,212,255,0.06)', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '10px', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>[{previewSvc.service_id}] {previewSvc.name}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '2px' }}>Category: {previewSvc.category}</div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span className="term-badge term-badge-cyan">Min Views/Order: {previewSvc.min_order?.toLocaleString()}</span>
+              <span className="term-badge">Max: {previewSvc.max_order?.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, color: 'var(--success)' }}>PKR {previewSvc.rate_pkr?.toFixed(1)}/k</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Service Catalog */}
@@ -962,21 +1106,27 @@ function ServicesTab() {
           <table className="term-table">
             <thead>
               <tr>
-                <th>ID</th><th>Service Name</th><th>USD</th><th>PKR</th><th>Min</th><th>Max</th><th></th>
+                <th>ID</th><th>Service Name</th><th>Rate / 1k</th><th>Min Views / Order</th><th>Max Order</th><th>Action</th>
               </tr>
             </thead>
             <tbody>
               {filteredServices.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>No services registered</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>No services registered</td></tr>
               ) : (
                 filteredServices.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>#{s.service_id}</td>
-                    <td>{s.name}</td>
-                    <td>${s.rate_usd?.toFixed(4)}</td>
-                    <td>PKR {s.rate_pkr?.toFixed(1)}</td>
-                    <td>{s.min_order?.toLocaleString()}</td>
-                    <td>{s.max_order?.toLocaleString()}</td>
+                    <td style={{ fontWeight: 500 }}>{s.name}</td>
+                    <td>
+                      <strong style={{ color: 'var(--success)' }}>PKR {s.rate_pkr?.toFixed(1)}</strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>(${s.rate_usd?.toFixed(4)})</span>
+                    </td>
+                    <td>
+                      <span className="term-badge term-badge-cyan" style={{ fontSize: '11px', fontWeight: 700 }}>
+                        Min: {s.min_order?.toLocaleString() || '100'}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{s.max_order?.toLocaleString() || '1,000,000'}</td>
                     <td><button className="term-btn term-btn-red term-btn-sm" onClick={() => handleDeleteSvc(s.id)}>Remove</button></td>
                   </tr>
                 ))

@@ -430,6 +430,15 @@ async function updateCampaignLiveStats(camp) {
   }
 }
 
+function getServiceMin(serviceId, defaultMin = 1) {
+  if (!serviceId) return defaultMin;
+  const svc = (state.services || []).find(s => String(s.service_id) === String(serviceId));
+  if (svc && svc.min_order && Number(svc.min_order) > 0) {
+    return parseInt(svc.min_order);
+  }
+  return defaultMin;
+}
+
 async function runDripWorker(url, abortSignal) {
   const camp = state.campaigns[url];
   if (!camp) return;
@@ -534,8 +543,9 @@ async function runDripWorker(url, abortSignal) {
     }
 
     const viewsRemaining = camp.total_views - camp.views_delivered;
-    const basePulse = Math.round(100 + Math.random() * 150);
-    const pulseBurst = Math.min(viewsRemaining, Math.max(100, Math.round(basePulse * waveMultiplier)));
+    const minViews = getServiceMin(camp.view_service, 100);
+    const basePulse = Math.round(minViews + Math.random() * 150);
+    const pulseBurst = Math.min(viewsRemaining, Math.max(minViews, Math.round(basePulse * waveMultiplier)));
 
     if (camp.view_service) {
       const void_id = await smmPlaceOrderWithRetry(camp.view_service, url, pulseBurst, 'VIEWS');
@@ -558,8 +568,9 @@ async function runDripWorker(url, abortSignal) {
       }
     }
 
-    // DISPATCH LIKES ONCE DEFICIT >= MINIMUM (Default min 10)
-    if (camp.like_service && camp.likes_deficit >= 10) {
+    // DISPATCH LIKES ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
+    const minLikes = getServiceMin(camp.like_service, 10);
+    if (camp.like_service && camp.likes_deficit >= minLikes) {
       const dispatchQty = Math.floor(camp.likes_deficit);
       const loid = await smmPlaceOrderWithRetry(camp.like_service, url, dispatchQty, 'LIKES');
       if (loid) {
@@ -571,8 +582,9 @@ async function runDripWorker(url, abortSignal) {
       }
     }
 
-    // DISPATCH COMMENTS ONCE DEFICIT >= MINIMUM (Default min 5)
-    if (camp.comment_service && camp.comments_deficit >= 5) {
+    // DISPATCH COMMENTS ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
+    const minComments = getServiceMin(camp.comment_service, 5);
+    if (camp.comment_service && camp.comments_deficit >= minComments) {
       const dispatchQty = Math.floor(camp.comments_deficit);
       const coid = await smmPlaceOrderWithRetry(camp.comment_service, url, dispatchQty, 'COMMENTS');
       if (coid) {
@@ -583,8 +595,9 @@ async function runDripWorker(url, abortSignal) {
       }
     }
 
-    // DISPATCH SHARES ONCE DEFICIT >= MINIMUM (Default min 5)
-    if (camp.share_service && camp.shares_deficit >= 5) {
+    // DISPATCH SHARES ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
+    const minShares = getServiceMin(camp.share_service, 5);
+    if (camp.share_service && camp.shares_deficit >= minShares) {
       const dispatchQty = Math.floor(camp.shares_deficit);
       const soid = await smmPlaceOrderWithRetry(camp.share_service, url, dispatchQty, 'SHARES');
       if (soid) {
@@ -595,8 +608,9 @@ async function runDripWorker(url, abortSignal) {
       }
     }
 
-    // DISPATCH SAVES ONCE DEFICIT >= MINIMUM (Default min 5)
-    if (camp.save_service && camp.saves_deficit >= 5) {
+    // DISPATCH SAVES ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
+    const minSaves = getServiceMin(camp.save_service, 5);
+    if (camp.save_service && camp.saves_deficit >= minSaves) {
       const dispatchQty = Math.floor(camp.saves_deficit);
       const svid = await smmPlaceOrderWithRetry(camp.save_service, url, dispatchQty, 'SAVES');
       if (svid) {
@@ -980,32 +994,103 @@ function startServer() {
             return;
           }
 
-          if (pathname === '/api/service/add' || pathname === '/api/add_service') {
-            const { service_id, name } = data;
-            if (!service_id || !name) {
+          if (pathname === '/api/service/lookup' || pathname === '/api/lookup_service') {
+            const service_id = data.service_id || data.id;
+            if (!service_id) {
               res.writeHead(400);
-              res.end(JSON.stringify({ ok: false, error: 'service_id and name required' }));
+              res.end(JSON.stringify({ ok: false, error: 'service_id is required' }));
               return;
             }
             try {
               const servicesList = await smmGetServices();
               const found = servicesList.find(s => String(s.service) === String(service_id));
+              if (found) {
+                const rateUsd = parseFloat(found.rate || 0);
+                const ratePkr = rateUsd * (state.custom_pkr_rate || 297);
+                const minOrder = parseInt(found.min || 1);
+                const maxOrder = parseInt(found.max || 1000000);
+                res.end(JSON.stringify({
+                  ok: true,
+                  found: {
+                    service_id: String(found.service),
+                    name: found.name,
+                    category: found.category || 'General',
+                    rate_usd: rateUsd,
+                    rate_pkr: ratePkr,
+                    min_order: minOrder,
+                    max_order: maxOrder,
+                    type: found.type || 'Default'
+                  }
+                }));
+              } else {
+                res.end(JSON.stringify({ ok: false, error: `Service #${service_id} not found on panel` }));
+              }
+            } catch (err) {
+              res.writeHead(500);
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (pathname === '/api/service/sync' || pathname === '/api/sync_services') {
+            try {
+              const servicesList = await smmGetServices();
+              let updatedCount = 0;
+              state.services.forEach(s => {
+                const found = servicesList.find(item => String(item.service) === String(s.service_id));
+                if (found) {
+                  if (found.rate) s.rate_usd = parseFloat(found.rate);
+                  s.rate_pkr = s.rate_usd * (state.custom_pkr_rate || 297);
+                  if (found.min) s.min_order = parseInt(found.min);
+                  if (found.max) s.max_order = parseInt(found.max);
+                  if (found.name && !s.name) s.name = found.name;
+                  updatedCount++;
+                }
+              });
+              saveState();
+              logMsg(`🔄 Synced ${updatedCount} services with live panel minimums & rates`, 'success');
+              res.end(JSON.stringify({ ok: true, updated: updatedCount }));
+            } catch (err) {
+              res.writeHead(500);
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (pathname === '/api/service/add' || pathname === '/api/add_service') {
+            const { service_id, name } = data;
+            if (!service_id) {
+              res.writeHead(400);
+              res.end(JSON.stringify({ ok: false, error: 'service_id is required' }));
+              return;
+            }
+            try {
+              const servicesList = await smmGetServices();
+              const found = servicesList.find(s => String(s.service) === String(service_id));
+              const svcName = (name && name.trim()) ? name.trim() : (found && found.name ? found.name : `Service #${service_id}`);
               const rateUsd = found ? parseFloat(found.rate || 0) : 0.05;
               const ratePkr = rateUsd * (state.custom_pkr_rate || 297);
               const minOrder = found ? parseInt(found.min || 1) : 1;
               const maxOrder = found ? parseInt(found.max || 1000000) : 1000000;
 
+              const existingIdx = state.services.findIndex(s => String(s.service_id) === String(service_id));
               const svcObj = {
-                id: uuidv4(),
+                id: existingIdx >= 0 ? state.services[existingIdx].id : uuidv4(),
                 service_id: String(service_id),
-                name,
+                name: svcName,
                 rate_usd: rateUsd,
                 rate_pkr: ratePkr,
                 min_order: minOrder,
                 max_order: maxOrder
               };
-              state.services.push(svcObj);
+
+              if (existingIdx >= 0) {
+                state.services[existingIdx] = svcObj;
+              } else {
+                state.services.push(svcObj);
+              }
               saveState();
+              logMsg(`✅ Service #${service_id} registered (${svcName}) — Min Order: ${minOrder}`, 'success');
               res.end(JSON.stringify({ ok: true, service: svcObj }));
             } catch (err) {
               res.writeHead(500);
