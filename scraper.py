@@ -81,6 +81,20 @@ def extract_instagram_direct(url, proxy_url=None):
         'Referer': canonical_url
     }
 
+    # Build proxy opener if proxy provided
+    opener = None
+    if proxy_url and proxy_url != "null":
+        try:
+            proxy_handler = urllib.request.ProxyHandler({'http': proxy_url, 'https': proxy_url})
+            opener = urllib.request.build_opener(proxy_handler)
+        except Exception:
+            opener = None
+
+    def fetch_url(r, timeout=6):
+        if opener:
+            return opener.open(r, timeout=timeout)
+        return urllib.request.urlopen(r, timeout=timeout)
+
     # Strategy 1: GraphQL Web Client API (Direct data extraction)
     graphql_doc_ids = ["10015901848480474", "8845758582119845", "25531498899829322", "7692226297508922"]
     for doc_id in graphql_doc_ids:
@@ -88,7 +102,7 @@ def extract_instagram_direct(url, proxy_url=None):
             params = urllib.parse.urlencode({'doc_id': doc_id, 'variables': json.dumps({'shortcode': shortcode})})
             endpoint = f"https://www.instagram.com/graphql/query/?{params}"
             req = urllib.request.Request(endpoint, headers=headers)
-            with urllib.request.urlopen(req, timeout=6) as res:
+            with fetch_url(req, timeout=6) as res:
                 if res.status == 200:
                     payload = json.loads(res.read().decode('utf-8'))
                     media = payload.get('data', {}).get('xdt_shortcode_media') or payload.get('data', {}).get('shortcode_media')
@@ -118,7 +132,7 @@ def extract_instagram_direct(url, proxy_url=None):
     try:
         json_url = f"https://www.instagram.com/reel/{shortcode}/?__a=1&__d=dis"
         req = urllib.request.Request(json_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=6) as res:
+        with fetch_url(req, timeout=6) as res:
             if res.status == 200:
                 payload = json.loads(res.read().decode('utf-8'))
                 items = payload.get('items', [])
