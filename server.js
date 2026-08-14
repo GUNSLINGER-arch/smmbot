@@ -307,6 +307,141 @@ async function smmPlaceOrderWithRetry(serviceId, url, qty, typeLabel, maxAttempt
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  APIFY SCRAPING POOL & BALANCE MONITOR
+// ─────────────────────────────────────────────────────────────────
+const apifyKeysFile = path.join(stateDir, 'apify_keys.json');
+let cachedApifyStats = null;
+let lastApifyStatsFetch = 0;
+
+function readApifyKeys() {
+  const keys = [];
+  try {
+    if (fs.existsSync(apifyKeysFile)) {
+      const raw = fs.readFileSync(apifyKeysFile, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const k of parsed) {
+          if (k && typeof k === 'string' && k.trim()) {
+            keys.push(k.trim());
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to read apify_keys.json', e);
+  }
+  const envKeys = process.env.APIFY_API_KEYS || '';
+  if (envKeys) {
+    for (const k of envKeys.split(',')) {
+      const clean = k.trim();
+      if (clean && !keys.includes(clean)) keys.push(clean);
+    }
+  }
+  return keys;
+}
+
+function saveApifyKeys(keys) {
+  try {
+    const cleanKeys = Array.from(new Set(keys.map(k => (typeof k === 'string' ? k.trim() : '')).filter(Boolean)));
+    fs.writeFileSync(apifyKeysFile, JSON.stringify(cleanKeys, null, 2), 'utf8');
+    return cleanKeys;
+  } catch (e) {
+    console.error('Failed to save apify_keys.json', e);
+    return [];
+  }
+}
+
+async function getApifyPoolStats(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedApifyStats && (now - lastApifyStatsFetch < 25000)) {
+    return cachedApifyStats;
+  }
+
+  const keys = readApifyKeys();
+  let total_limit_usd = 0;
+  let total_used_usd = 0;
+  let total_remaining_usd = 0;
+  let active_accounts = 0;
+  const keyDetails = [];
+
+  for (const token of keys) {
+    const masked = token.length > 14 ? `${token.slice(0, 10)}...${token.slice(-4)}` : '••••••••';
+    try {
+      const [limitsRes, userRes] = await Promise.allSettled([
+        axios.get(`https://api.apify.com/v2/users/me/limits?token=${token}`, { timeout: 6000 }),
+        axios.get(`https://api.apify.com/v2/users/me?token=${token}`, { timeout: 6000 })
+      ]);
+
+      if (limitsRes.status === 'fulfilled' && limitsRes.value.data && limitsRes.value.data.data) {
+        const limData = limitsRes.value.data.data;
+        const userData = userRes.status === 'fulfilled' ? (userRes.value.data?.data || {}) : {};
+
+        const maxMonthly = limData.limits?.maxMonthlyUsageUsd || 10;
+        const currentUsage = limData.current?.monthlyUsageUsd || 0;
+        const remaining = Math.max(0, maxMonthly - currentUsage);
+        const resetDate = limData.monthlyUsageCycle?.endAt ? limData.monthlyUsageCycle.endAt.split('T')[0] : '';
+        const username = userData.username || 'Apify User';
+        const tier = userData.plan?.tier || 'FREE';
+
+        total_limit_usd += maxMonthly;
+        total_used_usd += currentUsage;
+        total_remaining_usd += remaining;
+        if (remaining > 0.20) active_accounts++;
+
+        keyDetails.push({
+          key: token,
+          key_masked: masked,
+          username,
+          tier,
+          limit_usd: maxMonthly,
+          used_usd: currentUsage,
+          remaining_usd: remaining,
+          reset_date: resetDate,
+          status: remaining > 0.20 ? 'active' : 'depleted'
+        });
+      } else {
+        keyDetails.push({
+          key: token,
+          key_masked: masked,
+          username: 'Invalid / Depleted',
+          tier: 'UNKNOWN',
+          limit_usd: 0,
+          used_usd: 0,
+          remaining_usd: 0,
+          reset_date: '',
+          status: 'invalid'
+        });
+      }
+    } catch (err) {
+      keyDetails.push({
+        key: token,
+        key_masked: masked,
+        username: 'Error / Timeout',
+        tier: 'UNKNOWN',
+        limit_usd: 0,
+        used_usd: 0,
+        remaining_usd: 0,
+        reset_date: '',
+        status: 'invalid'
+      });
+    }
+  }
+
+  cachedApifyStats = {
+    ok: true,
+    total_limit_usd,
+    total_used_usd,
+    total_remaining_usd,
+    active_accounts,
+    total_accounts: keys.length,
+    keys: keyDetails,
+    last_updated: new Date().toLocaleTimeString()
+  };
+  lastApifyStatsFetch = Date.now();
+  return cachedApifyStats;
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  METADATA SCRAPER
 // ─────────────────────────────────────────────────────────────────
 function getPythonExecutablePath() {
@@ -387,6 +522,9 @@ async function fetchLiveMetadata(url, platform) {
   const comments = pyMeta.comments !== null ? parseInt(pyMeta.comments) : Math.max(0, Math.floor(views * 0.0010));
   const shares = pyMeta.shares !== null ? parseInt(pyMeta.shares) : Math.max(0, Math.floor(views * 0.0012));
   const saves = pyMeta.saves !== null ? parseInt(pyMeta.saves) : Math.max(0, Math.floor(views * 0.0045));
+
+  // Trigger async Apify pool balance refresh in background after each scrape run
+  getApifyPoolStats(true).then(stats => broadcastEvent('apify_stats', stats)).catch(() => {});
 
   return {
     title,
@@ -836,6 +974,10 @@ function startServer() {
         res.end(JSON.stringify(state.order_history || []));
       } else if (pathname === '/api/analytics' || pathname === '/api/get_analytics') {
         res.end(JSON.stringify(state.analytics || {}));
+      } else if (pathname === '/api/apify/stats' || pathname === '/api/get_apify_stats') {
+        getApifyPoolStats(true).then(stats => {
+          res.end(JSON.stringify(stats));
+        }).catch(e => res.end(JSON.stringify({ ok: false, error: e.message })));
       } else if (pathname === '/api/export_services_csv') {
         const rows = ['ID,Service_ID,Name,Rate_USD,Rate_PKR,Min,Max'];
         state.services.forEach(s => rows.push(`"${s.id}","${s.service_id}","${s.name}",${s.rate_usd},${s.rate_pkr},${s.min_order},${s.max_order}`));
@@ -939,6 +1081,44 @@ function startServer() {
             state.auto_proxy = null;
             saveState();
             res.end(JSON.stringify({ ok: true }));
+            return;
+          }
+
+          if (pathname === '/api/apify/keys' || pathname === '/api/save_apify_keys') {
+            const keysToSave = Array.isArray(data.keys) ? data.keys : [];
+            saveApifyKeys(keysToSave);
+            const stats = await getApifyPoolStats(true);
+            logMsg(`🔄 Apify Key Pool updated: ${stats.total_accounts} accounts registered`, 'success');
+            res.end(JSON.stringify(stats));
+            return;
+          }
+
+          if (pathname === '/api/apify/add_key') {
+            const newKey = (data.key || data.new_key || '').trim();
+            if (!newKey) {
+              res.writeHead(400);
+              res.end(JSON.stringify({ ok: false, error: 'Key cannot be empty' }));
+              return;
+            }
+            const current = readApifyKeys();
+            if (!current.includes(newKey)) {
+              current.push(newKey);
+              saveApifyKeys(current);
+            }
+            const stats = await getApifyPoolStats(true);
+            logMsg(`➕ Apify Key added: ${stats.total_accounts} accounts total`, 'success');
+            res.end(JSON.stringify(stats));
+            return;
+          }
+
+          if (pathname === '/api/apify/delete_key') {
+            const keyToDelete = (data.key || '').trim();
+            const current = readApifyKeys();
+            const filtered = current.filter(k => k !== keyToDelete);
+            saveApifyKeys(filtered);
+            const stats = await getApifyPoolStats(true);
+            logMsg(`🗑️ Apify Key removed: ${stats.total_accounts} accounts remaining`, 'info');
+            res.end(JSON.stringify(stats));
             return;
           }
 

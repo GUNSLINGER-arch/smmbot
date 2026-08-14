@@ -100,7 +100,34 @@ export interface MetaResult {
   author: string;
   views: number | null;
   likes: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  saves?: number | null;
   source: string;
+}
+
+export interface ApifyKeyDetail {
+  key: string;
+  key_masked: string;
+  username: string;
+  tier: string;
+  limit_usd: number;
+  used_usd: number;
+  remaining_usd: number;
+  reset_date: string;
+  status: 'active' | 'depleted' | 'invalid';
+}
+
+export interface ApifyPoolStats {
+  ok: boolean;
+  total_limit_usd: number;
+  total_used_usd: number;
+  total_remaining_usd: number;
+  active_accounts: number;
+  total_accounts: number;
+  keys: ApifyKeyDetail[];
+  last_updated: string;
+  error?: string;
 }
 
 // ──────────────────────────────────────────────────
@@ -183,6 +210,14 @@ const invoke = <T>(channel: string, ...args: any[]): Promise<T> => {
       return httpFetch<{ ok: boolean; proxy?: string }>('/api/scan_proxy', { method: 'POST' }) as Promise<T>;
     case 'place_order':
       return httpFetch<{ ok: boolean; order_id?: string; error?: string }>('/api/order/place', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
+    case 'get_apify_stats':
+      return httpFetch<ApifyPoolStats>('/api/apify/stats') as Promise<T>;
+    case 'save_apify_keys':
+      return httpFetch<ApifyPoolStats>('/api/apify/keys', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
+    case 'add_apify_key':
+      return httpFetch<ApifyPoolStats>('/api/apify/add_key', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
+    case 'delete_apify_key':
+      return httpFetch<ApifyPoolStats>('/api/apify/delete_key', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
     case 'window_close':
     case 'window_minimize':
     case 'window_maximize':
@@ -276,6 +311,12 @@ export const api = {
   scanProxy:  () => invoke<{ ok: boolean; proxy?: string }>('scan_proxy'),
   clearProxy: () => invoke('clear_proxy'),
 
+  // Apify Scraping Cloud Pool
+  getApifyStats:  () => invoke<ApifyPoolStats>('get_apify_stats'),
+  saveApifyKeys:  (keys: string[]) => invoke<ApifyPoolStats>('save_apify_keys', { keys }),
+  addApifyKey:    (key: string) => invoke<ApifyPoolStats>('add_apify_key', { key }),
+  deleteApifyKey: (key: string) => invoke<ApifyPoolStats>('delete_apify_key', { key }),
+
   // Window
   windowClose:    () => invoke('window_close'),
   windowMinimize: () => invoke('window_minimize'),
@@ -286,9 +327,10 @@ export const api = {
 //  Events
 // ──────────────────────────────────────────────────
 export const events = {
-  onLog:             (cb: (entry: LogEntry) => void)  => listen<LogEntry>('log', cb),
-  onCampaignUpdate:  (cb: (url: string) => void)      => listen<string>('campaign_update', cb),
-  onCampaignComplete:(cb: (url: string) => void)      => listen<string>('campaign_complete', cb),
+  onLog:             (cb: (entry: LogEntry) => void)        => listen<LogEntry>('log', cb),
+  onCampaignUpdate:  (cb: (url: string) => void)            => listen<string>('campaign_update', cb),
+  onCampaignComplete:(cb: (url: string) => void)            => listen<string>('campaign_complete', cb),
+  onApifyStats:      (cb: (stats: ApifyPoolStats) => void)  => listen<ApifyPoolStats>('apify_stats', cb),
 };
 
 // ──────────────────────────────────────────────────

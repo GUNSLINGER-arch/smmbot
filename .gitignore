@@ -5,3 +5,5 @@ dist-electron
 smmbot_state.json
 apify_keys.json
 .DS_Store
+__pycache__/
+*.pyc

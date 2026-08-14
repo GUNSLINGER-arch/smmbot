@@ -3,8 +3,8 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import './index.css';
 import { AppProvider, useApp } from './AppContext';
 import {
-  api, fmtNumber, truncateTitle, timeAgo, pct, downloadCsv,
-  Campaign, SavedService, LogEntry, OrderHistoryItem, AnalyticsPoint
+  api, events, fmtNumber, truncateTitle, timeAgo, pct, downloadCsv,
+  Campaign, SavedService, LogEntry, OrderHistoryItem, AnalyticsPoint, ApifyPoolStats
 } from './api';
 
 // ─────────────────────────────────────────────────────────────────
@@ -1398,6 +1398,298 @@ function ConfigTab() {
         <button className="term-btn term-btn-green" style={{ width: '100%' }} onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Configuration'}
         </button>
+      </div>
+
+      {/* Apify Scraping Cloud Pool Card */}
+      <ApifyPoolCard />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  APIFY SCRAPING CLOUD POOL SECTION
+// ─────────────────────────────────────────────────────────────────
+function ApifyPoolCard() {
+  const { config, addToast } = useApp();
+  const [stats, setStats] = useState<ApifyPoolStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [newKey, setNewKey] = useState('');
+  const [addingKey, setAddingKey] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [savingBulk, setSavingBulk] = useState(false);
+
+  const pkrRate = config?.custom_pkr_rate || 297;
+
+  const loadStats = async () => {
+    setLoading(true);
+    try {
+      const res = await api.getApifyStats();
+      if (res && res.ok) {
+        setStats(res);
+      }
+    } catch (e) {
+      console.error('Failed to load Apify pool stats', e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadStats();
+    const unsub = events.onApifyStats((newStats) => {
+      setStats(newStats);
+    });
+    return () => {
+      unsub.then((fn) => fn?.());
+    };
+  }, []);
+
+  const handleAddKey = async () => {
+    const clean = newKey.trim();
+    if (!clean) {
+      addToast('Please enter an Apify API key', 'info');
+      return;
+    }
+    setAddingKey(true);
+    try {
+      const res = await api.addApifyKey(clean);
+      if (res && res.ok) {
+        setStats(res);
+        setNewKey('');
+        addToast(`Apify account added! Total accounts: ${res.total_accounts}`, 'success');
+      } else {
+        addToast(res?.error || 'Failed to add key', 'error');
+      }
+    } catch (e: any) {
+      addToast(e.message || 'Error adding key', 'error');
+    }
+    setAddingKey(false);
+  };
+
+  const handleDeleteKey = async (key: string) => {
+    try {
+      const res = await api.deleteApifyKey(key);
+      if (res && res.ok) {
+        setStats(res);
+        addToast('Apify account removed from pool', 'info');
+      }
+    } catch (e: any) {
+      addToast('Failed to delete key', 'error');
+    }
+  };
+
+  const handleSaveBulk = async () => {
+    const lines = bulkText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!lines.length) {
+      addToast('No keys provided', 'info');
+      return;
+    }
+    setSavingBulk(true);
+    try {
+      const res = await api.saveApifyKeys(lines);
+      if (res && res.ok) {
+        setStats(res);
+        setShowBulk(false);
+        setBulkText('');
+        addToast(`Saved ${res.total_accounts} Apify accounts!`, 'success');
+      }
+    } catch (e: any) {
+      addToast(e.message || 'Error saving keys', 'error');
+    }
+    setSavingBulk(false);
+  };
+
+  const remUsd = stats?.total_remaining_usd || 0;
+  const remPkr = remUsd * pkrRate;
+  const limitUsd = stats?.total_limit_usd || 0;
+  const usedUsd = stats?.total_used_usd || 0;
+  const usagePct = limitUsd > 0 ? Math.min(100, Math.round((usedUsd / limitUsd) * 100)) : 0;
+  const remainingPct = 100 - usagePct;
+
+  return (
+    <div className="term-card glass-card--glow" style={{ marginTop: '16px' }}>
+      <div className="term-card-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '18px' }}>☁️</span>
+          <span className="term-card-title">Apify Scraping Cloud Pool</span>
+        </div>
+        <button
+          className="term-btn term-btn-sm term-btn-cyan"
+          onClick={loadStats}
+          disabled={loading}
+        >
+          {loading ? 'Syncing...' : '🔄 Check Balances'}
+        </button>
+      </div>
+
+      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+        Multi-account rotation pool for 100% reliable TikTok & Instagram scraping. Add unlimited free accounts to expand your monthly pool balance ($10 credit per account). Balances auto-refresh after each run.
+      </p>
+
+      {/* Aggregate Balance Banner */}
+      <div style={{
+        padding: '16px',
+        background: 'rgba(0, 212, 255, 0.06)',
+        border: '1px solid rgba(0, 212, 255, 0.2)',
+        borderRadius: '14px',
+        marginBottom: '16px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Total Scraping Pool Balance
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+              PKR {remPkr.toLocaleString('en-US', { maximumFractionDigits: 0 })}{' '}
+              <span style={{ fontSize: '14px', color: 'var(--accent-cyan)' }}>(${remUsd.toFixed(2)} USD)</span>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div className="term-badge term-badge-green" style={{ fontSize: '12px', padding: '4px 12px' }}>
+              {stats?.active_accounts || 0} / {stats?.total_accounts || 0} Accounts Active
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+              Monthly Limit: ${limitUsd.toFixed(2)} | Used: ${usedUsd.toFixed(3)}
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div style={{ marginTop: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            <span>Credits Remaining ({remainingPct}%)</span>
+            <span>{stats?.last_updated ? `Last checked ${stats.last_updated}` : ''}</span>
+          </div>
+          <div className="term-prog-bg" style={{ height: '6px' }}>
+            <div className="term-prog-fill" style={{ width: `${remainingPct}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Add New Key Form */}
+      <div className="term-field-group">
+        <label className="term-field-lbl">Add New Apify API Token</label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            className="term-input"
+            type="password"
+            placeholder="apify_api_..."
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+          />
+          <button
+            className="term-btn term-btn-green term-btn-sm"
+            onClick={handleAddKey}
+            disabled={addingKey}
+            style={{ flexShrink: 0 }}
+          >
+            {addingKey ? 'Adding...' : '+ Add Account'}
+          </button>
+          <button
+            className="term-btn term-btn-sm"
+            onClick={() => setShowBulk(!showBulk)}
+            style={{ flexShrink: 0 }}
+          >
+            {showBulk ? 'Hide Bulk' : 'Bulk Paste'}
+          </button>
+        </div>
+      </div>
+
+      {/* Bulk Key Import Box */}
+      {showBulk && (
+        <div style={{
+          padding: '12px',
+          background: 'var(--bg-elevated)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: '12px',
+          marginBottom: '16px'
+        }}>
+          <label className="term-field-lbl">Paste Multiple Keys (One per line)</label>
+          <textarea
+            className="term-input"
+            rows={4}
+            placeholder="apify_api_key_1&#10;apify_api_key_2&#10;apify_api_key_3"
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', resize: 'vertical' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button className="term-btn term-btn-sm" onClick={() => setShowBulk(false)}>Cancel</button>
+            <button className="term-btn term-btn-cyan term-btn-sm" onClick={handleSaveBulk} disabled={savingBulk}>
+              {savingBulk ? 'Saving...' : 'Save All Keys'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Accounts List */}
+      <div>
+        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Registered Accounts ({stats?.keys?.length || 0})
+        </div>
+
+        {(!stats || !stats.keys || stats.keys.length === 0) ? (
+          <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>
+            No Apify accounts configured. Add an API token above to activate the scraping pool!
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {stats.keys.map((k, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 14px',
+                  background: 'var(--bg-elevated)',
+                  border: `1px solid ${k.status === 'active' ? 'rgba(34,197,94,0.2)' : k.status === 'depleted' ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                  borderRadius: '12px',
+                  flexWrap: 'wrap',
+                  gap: '8px'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                      @{k.username}
+                    </strong>
+                    <span className={`term-badge ${k.status === 'active' ? 'term-badge-green' : k.status === 'depleted' ? 'term-badge-amber' : 'term-badge-red'}`} style={{ fontSize: '10px' }}>
+                      {k.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                    {k.key_masked} {k.reset_date ? `• Resets ${k.reset_date}` : ''}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: k.status === 'active' ? 'var(--success)' : 'var(--warning)' }}>
+                      ${k.remaining_usd.toFixed(2)}{' '}
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>/ ${k.limit_usd.toFixed(0)}</span>
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                      Used: ${k.used_usd.toFixed(3)}
+                    </div>
+                  </div>
+
+                  <button
+                    className="term-btn term-btn-danger term-btn-sm"
+                    onClick={() => handleDeleteKey(k.key)}
+                    title="Remove key from pool"
+                    style={{ padding: '6px 10px' }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
