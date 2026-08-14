@@ -15,6 +15,30 @@ import urllib.parse
 # Redirect stderr to devnull so library output never pollutes JSON stdout
 sys.stderr = open(os.devnull, 'w')
 
+APIFY_KEYS_DEFAULT = []
+
+def get_apify_keys():
+    """Load Apify tokens from apify_keys.json or env or default pool."""
+    keys = list(APIFY_KEYS_DEFAULT)
+    key_file = os.path.join(os.path.dirname(__file__), "apify_keys.json")
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "r") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, list):
+                    for k in loaded:
+                        if k and isinstance(k, str) and k not in keys:
+                            keys.append(k)
+        except Exception:
+            pass
+    env_keys = os.environ.get("APIFY_API_KEYS", "")
+    if env_keys:
+        for k in env_keys.split(","):
+            k = k.strip()
+            if k and k not in keys:
+                keys.append(k)
+    return keys
+
 def parse_count(s):
     if not s: return 0
     s = str(s).replace(',', '').strip().upper()
@@ -157,6 +181,76 @@ def extract_instagram_direct(url, proxy_url=None):
 
     return None
 
+def extract_via_apify(url, platform):
+    """
+    Tier 2 Cloud Scraper via Apify Multi-Key Rotation Pool.
+    Bypasses all IP bans, geo-restrictions, and captchas.
+    """
+    keys = get_apify_keys()
+    if not keys:
+        return None
+
+    for token in keys:
+        try:
+            if platform == "Instagram" or "instagram.com" in url:
+                actor_id = "apify/instagram-scraper"
+                run_url = f"https://api.apify.com/v2/acts/{urllib.parse.quote(actor_id, safe='')}/run-sync-get-dataset-items?token={token}&timeout=45"
+                payload = {"directUrls": [url], "resultsType": "posts"}
+                data_bytes = json.dumps(payload).encode('utf-8')
+                req = urllib.request.Request(run_url, data=data_bytes, headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(req, timeout=50) as res:
+                    if res.status in (200, 201):
+                        items = json.loads(res.read().decode('utf-8'))
+                        if items and len(items) > 0:
+                            item = items[0]
+                            plays = item.get('videoPlayCount') or item.get('plays') or item.get('playsInstagram')
+                            views = plays or item.get('videoViewCount') or item.get('views')
+                            likes = item.get('likesCount') or item.get('likes')
+                            comments = item.get('commentsCount') or item.get('comments')
+                            author = item.get('ownerUsername') or item.get('ownerFullName') or item.get('profileHandle')
+                            caption = item.get('caption') or item.get('title') or ''
+                            return {
+                                'title': (caption or '').split('\n')[0][:120],
+                                'author': author or '',
+                                'views': views,
+                                'likes': likes,
+                                'comments': comments,
+                                'shares': item.get('shares') or item.get('shareCount'),
+                                'saves': item.get('saves') or item.get('savedCount'),
+                                'source': 'apify_instagram'
+                            }
+            elif platform == "TikTok" or "tiktok.com" in url:
+                actor_id = "clockworks/free-tiktok-scraper"
+                run_url = f"https://api.apify.com/v2/acts/{urllib.parse.quote(actor_id, safe='')}/run-sync-get-dataset-items?token={token}&timeout=45"
+                payload = {"postURLs": [url]}
+                data_bytes = json.dumps(payload).encode('utf-8')
+                req = urllib.request.Request(run_url, data=data_bytes, headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(req, timeout=50) as res:
+                    if res.status in (200, 201):
+                        items = json.loads(res.read().decode('utf-8'))
+                        if items and len(items) > 0:
+                            item = items[0]
+                            views = item.get('playCount') or item.get('views')
+                            likes = item.get('diggCount') or item.get('likes')
+                            comments = item.get('commentCount') or item.get('comments')
+                            shares = item.get('shareCount') or item.get('shares')
+                            saves = item.get('collectCount') or item.get('bookmarkCount')
+                            author = item.get('authorMeta', {}).get('name') or item.get('author', '')
+                            text = item.get('text') or item.get('title') or ''
+                            return {
+                                'title': (text or '').split('\n')[0][:120],
+                                'author': author,
+                                'views': views,
+                                'likes': likes,
+                                'comments': comments,
+                                'shares': shares,
+                                'saves': saves,
+                                'source': 'apify_tiktok'
+                            }
+        except Exception:
+            continue
+    return None
+
 def main():
     if len(sys.argv) < 3:
         print(json.dumps({"error": "Missing args"}))
@@ -176,7 +270,7 @@ def main():
         'source': 'none'
     }
 
-    # Step 1: If Instagram, run the new direct GraphQL/JSON engine first
+    # Step 1: Direct Scraper (Zero-cost, ultra-fast ~1.5s)
     if platform == "Instagram" or "instagram.com" in url:
         try:
             insta_direct = extract_instagram_direct(url, proxy_url)
@@ -185,8 +279,8 @@ def main():
         except Exception:
             pass
 
-    # Step 2: Primary extraction for TikTok / secondary fallback via yt-dlp
-    if meta.get('views') is None or meta.get('likes') is None or not meta.get('title'):
+    # Step 2: Primary extraction for TikTok via yt-dlp
+    if (platform == "TikTok" or "tiktok.com" in url) or (meta.get('views') is None or meta.get('likes') is None or not meta.get('title')):
         try:
             import yt_dlp
             class QuietLogger:
@@ -231,7 +325,16 @@ def main():
         except Exception:
             pass
 
-    # Step 3: OEMBED Fallback for Title & Author
+    # Step 3: Tier 2 Cloud Scraper via Apify Multi-Key Rotation Pool (if direct failed or views == 0)
+    if meta.get('views') is None or meta.get('views') == 0:
+        try:
+            apify_meta = extract_via_apify(url, platform)
+            if apify_meta and apify_meta.get('views') is not None and apify_meta.get('views') > 0:
+                meta.update(apify_meta)
+        except Exception:
+            pass
+
+    # Step 4: OEMBED Fallback for Title & Author
     if not meta.get('title') or not meta.get('author'):
         try:
             if "tiktok.com" in url or platform == "TikTok":
@@ -255,7 +358,7 @@ def main():
         except Exception:
             pass
 
-    # Step 4: Guarantee clean titles & baseline fallback values
+    # Step 5: Guarantee clean titles & baseline fallback values
     if not meta.get('title') or meta['title'].strip() == '':
         clean_id = url.split('/')[-1].split('?')[0] if '/' in url else 'post'
         meta['title'] = f"{platform} Video ({clean_id})"
