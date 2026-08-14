@@ -40,6 +40,105 @@ def extract_from_dict(d, keys):
                     if res is not None: return res
     return None
 
+def extract_instagram_direct(url, proxy_url=None):
+    """
+    Direct multi-tiered extractor for Instagram Reels inspired by SCRAPER INTA API.
+    Extracts Plays (primary counted metric on Reels), Views, Likes, Comments, Shares, and Author.
+    """
+    m = re.search(r"/(?:reel|reels|p|tv|share)/([A-Za-z0-9_-]+)", url)
+    if not m:
+        clean = url.strip("/").split("/")[-1].split("?")[0]
+        shortcode = clean if re.match(r"^[A-Za-z0-9_-]{5,20}$", clean) else None
+    else:
+        shortcode = m.group(1)
+
+    if not shortcode:
+        return None
+
+    canonical_url = f"https://www.instagram.com/reel/{shortcode}/"
+    res_data = {
+        'title': '',
+        'author': '',
+        'views': None,
+        'likes': None,
+        'comments': None,
+        'shares': None,
+        'saves': None,
+        'source': 'none'
+    }
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'X-IG-App-ID': '936619743392459',
+        'X-ASBD-ID': '198387',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': canonical_url
+    }
+
+    # Strategy 1: GraphQL Web Client API (doc_ids from SCRAPER INTA API)
+    graphql_doc_ids = ["10015901848480474", "8845758582119845", "25531498899829322", "7692226297508922"]
+    for doc_id in graphql_doc_ids:
+        try:
+            params = urllib.parse.urlencode({'doc_id': doc_id, 'variables': json.dumps({'shortcode': shortcode})})
+            endpoint = f"https://www.instagram.com/graphql/query/?{params}"
+            req = urllib.request.Request(endpoint, headers=headers)
+            with urllib.request.urlopen(req, timeout=6) as res:
+                if res.status == 200:
+                    payload = json.loads(res.read().decode('utf-8'))
+                    media = payload.get('data', {}).get('xdt_shortcode_media') or payload.get('data', {}).get('shortcode_media')
+                    if media:
+                        # PLAYS COUNT IS PRIMARY FOR REELS (Counted by Content Rewards / Bounty checks)
+                        plays = media.get('video_play_count') or media.get('play_count')
+                        views = plays or media.get('video_view_count') or media.get('view_count')
+                        likes = (media.get('edge_media_preview_like', {}).get('count') or media.get('edge_liked_by', {}).get('count'))
+                        comments = (media.get('edge_media_to_parent_comment', {}).get('count') or media.get('edge_media_to_comment', {}).get('count'))
+                        caption_edges = media.get('edge_media_to_caption', {}).get('edges', [])
+                        caption = caption_edges[0].get('node', {}).get('text', '') if caption_edges else media.get('caption', '')
+                        owner = media.get('owner', {})
+
+                        res_data.update({
+                            'title': (caption or '').split('\n')[0][:120],
+                            'author': owner.get('username') or owner.get('full_name', ''),
+                            'views': views,
+                            'likes': likes,
+                            'comments': comments,
+                            'source': 'direct_graphql'
+                        })
+                        return res_data
+        except Exception:
+            pass
+
+    # Strategy 2: Direct __a=1 JSON endpoint
+    try:
+        json_url = f"https://www.instagram.com/reel/{shortcode}/?__a=1&__d=dis"
+        req = urllib.request.Request(json_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=6) as res:
+            if res.status == 200:
+                payload = json.loads(res.read().decode('utf-8'))
+                items = payload.get('items', [])
+                if items:
+                    item = items[0]
+                    plays = item.get('play_count') or item.get('video_play_count')
+                    views = plays or item.get('view_count') or item.get('video_view_count')
+                    likes = item.get('like_count')
+                    comments = item.get('comment_count')
+                    caption = item.get('caption', {}).get('text', '') if item.get('caption') else ''
+                    res_data.update({
+                        'title': (caption or '').split('\n')[0][:120],
+                        'author': item.get('user', {}).get('username', ''),
+                        'views': views,
+                        'likes': likes,
+                        'comments': comments,
+                        'source': 'direct_json'
+                    })
+                    return res_data
+    except Exception:
+        pass
+
+    return None
+
 def main():
     if len(sys.argv) < 3:
         print(json.dumps({"error": "Missing args"}))
@@ -59,51 +158,63 @@ def main():
         'source': 'none'
     }
 
-    # Tier 1: Primary extraction via yt-dlp (Most reliable for TikTok & Instagram)
-    try:
-        import yt_dlp
-        class QuietLogger:
-            def debug(self, msg): pass
-            def warning(self, msg): pass
-            def error(self, msg): pass
+    # Step 1: If Instagram, attempt direct GraphQL/JSON extractor first
+    if platform == "Instagram" or "instagram.com" in url:
+        try:
+            insta_direct = extract_instagram_direct(url, proxy_url)
+            if insta_direct and (insta_direct.get('views') is not None or insta_direct.get('likes') is not None):
+                meta.update(insta_direct)
+        except Exception:
+            pass
 
-        opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'logger': QuietLogger(),
-            'skip_download': True,
-            'socket_timeout': 10,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5'
+    # Step 2: Primary extraction via yt-dlp (TikTok & Instagram fallback)
+    if meta.get('views') is None or meta.get('likes') is None or not meta.get('title'):
+        try:
+            import yt_dlp
+            class QuietLogger:
+                def debug(self, msg): pass
+                def warning(self, msg): pass
+                def error(self, msg): pass
+
+            opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'logger': QuietLogger(),
+                'skip_download': True,
+                'socket_timeout': 10,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5'
+                }
             }
-        }
-        if proxy_url and proxy_url != "null":
-            opts['proxy'] = proxy_url
+            if proxy_url and proxy_url != "null":
+                opts['proxy'] = proxy_url
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-        
-        if info and info.get('title'):
-            saves_val = (
-                info.get('collect_count') or info.get('bookmark_count') or
-                info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
-            )
-            meta.update({
-                'title': info.get('title', ''),
-                'author': info.get('uploader') or info.get('channel', ''),
-                'views': info.get('view_count'),
-                'likes': info.get('like_count'),
-                'comments': info.get('comment_count'),
-                'shares': info.get('repost_count') or info.get('share_count'),
-                'saves': saves_val,
-                'source': 'yt-dlp'
-            })
-    except Exception:
-        pass
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            
+            if info and (info.get('title') or info.get('view_count')):
+                saves_val = (
+                    info.get('collect_count') or info.get('bookmark_count') or
+                    info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
+                )
+                # Prioritize play_count on reels if available
+                views_val = info.get('play_count') or info.get('view_count') or meta.get('views')
+                meta.update({
+                    'title': meta.get('title') or info.get('title', ''),
+                    'author': meta.get('author') or info.get('uploader') or info.get('channel', ''),
+                    'views': views_val,
+                    'likes': info.get('like_count') or meta.get('likes'),
+                    'comments': info.get('comment_count') or meta.get('comments'),
+                    'shares': info.get('repost_count') or info.get('share_count') or meta.get('shares'),
+                    'saves': saves_val or meta.get('saves'),
+                    'source': meta.get('source') if meta.get('source') != 'none' else 'yt-dlp'
+                })
+        except Exception:
+            pass
 
-    # Tier 2: Instaloader for Instagram if yt-dlp missed likes/views
+    # Step 3: Instaloader for Instagram (extract node play_count & view_count)
     if (platform == "Instagram" or "instagram.com" in url) and (meta.get('views') is None or meta.get('likes') is None):
         try:
             import instaloader
@@ -111,32 +222,36 @@ def main():
             if proxy_url and proxy_url != "null":
                 L.context._session.proxies = {'http': proxy_url, 'https': proxy_url}
             
-            m = re.search(r'/(?:reel|p|tv)/([A-Za-z0-9_-]+)/?', url)
+            m = re.search(r'/(?:reel|reels|p|tv|share)/([A-Za-z0-9_-]+)/?', url)
             if m:
                 shortcode = m.group(1)
                 post = instaloader.Post.from_shortcode(L.context, shortcode)
                 saves_count = None
+                plays_count = None
                 try:
                     node = post._node if hasattr(post, '_node') else {}
+                    plays_count = node.get('video_play_count') or node.get('play_count')
                     saves_count = node.get('saved_count') or node.get('bookmark_count') or node.get('save_count')
                 except Exception:
                     pass
 
+                views_val = plays_count or (post.video_view_count if post.is_video else None) or meta.get('views')
+
                 meta.update({
-                    "views": post.video_view_count if post.is_video else meta.get('views'),
+                    "views": views_val,
                     "likes": post.likes if post.likes else meta.get('likes'),
                     "comments": post.comments if post.comments else meta.get('comments'),
                     "shares": getattr(post, 'share_count', None) or meta.get('shares'),
                     "saves": saves_count or meta.get('saves'),
-                    "title": (post.caption or '').split('\n')[0][:120] if post.caption else meta.get('title'),
-                    "author": post.owner_username or meta.get('author'),
+                    "title": meta.get('title') or ((post.caption or '').split('\n')[0][:120] if post.caption else None),
+                    "author": meta.get('author') or post.owner_username,
                     "source": "instaloader"
                 })
         except Exception:
             pass
 
-    # Tier 3: OEMBED Fallback for Title & Author
-    if not meta.get('title'):
+    # Step 4: OEMBED Fallback for Title & Author
+    if not meta.get('title') or not meta.get('author'):
         try:
             if "tiktok.com" in url or platform == "TikTok":
                 oe_url = f"https://www.tiktok.com/oembed?url={urllib.parse.quote(url)}"
@@ -144,13 +259,22 @@ def main():
                 with urllib.request.urlopen(req, timeout=5) as res:
                     oe_data = json.loads(res.read().decode('utf-8'))
                     if oe_data.get('title'):
-                        meta['title'] = oe_data.get('title', '')
-                        meta['author'] = oe_data.get('author_name', '')
-                        meta['source'] = 'tiktok-oembed'
+                        meta['title'] = meta['title'] or oe_data.get('title', '')
+                        meta['author'] = meta['author'] or oe_data.get('author_name', '')
+                        if meta['source'] == 'none': meta['source'] = 'tiktok-oembed'
+            elif "instagram.com" in url or platform == "Instagram":
+                oe_url = f"https://api.instagram.com/oembed/?url={urllib.parse.quote(url)}"
+                req = urllib.request.Request(oe_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=5) as res:
+                    oe_data = json.loads(res.read().decode('utf-8'))
+                    if oe_data.get('author_name') or oe_data.get('title'):
+                        meta['title'] = meta['title'] or oe_data.get('title', '')
+                        meta['author'] = meta['author'] or oe_data.get('author_name', '')
+                        if meta['source'] == 'none': meta['source'] = 'instagram-oembed'
         except Exception:
             pass
 
-    # Tier 4: GUARANTEE ZERO N/A & ZERO EMPTY TITLES
+    # Step 5: GUARANTEE ZERO N/A & ZERO EMPTY TITLES
     if not meta.get('title') or meta['title'].strip() == '':
         clean_id = url.split('/')[-1].split('?')[0] if '/' in url else 'post'
         meta['title'] = f"{platform} Video ({clean_id})"
