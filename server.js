@@ -450,25 +450,108 @@ function getServiceMin(serviceId, defaultMin = 1) {
   return defaultMin;
 }
 
+// ─────────────────────────────────────────────────────────────────
+//  3-STAGE VIRAL S-CURVE & ADAPTIVE PACING CALCULATOR
+// ─────────────────────────────────────────────────────────────────
+function calculatePacingProfile(camp) {
+  const currentHour = new Date().getHours();
+  const viewsDelivered = camp.views_delivered || 0;
+  const totalViews = Math.max(camp.total_views || 1000, 1);
+  const progress = Math.min(viewsDelivered / totalViews, 1.0);
+  const minViews = getServiceMin(camp.view_service, 100);
+
+  // Timezone / Circadian scale (Night dip -65%, Peak surge +25%)
+  let circadianMultiplier = 1.0;
+  if (currentHour >= 1 && currentHour <= 6) {
+    circadianMultiplier = 0.35; // Night sleeping dip
+  } else if ((currentHour >= 12 && currentHour <= 14) || (currentHour >= 18 && currentHour <= 22)) {
+    circadianMultiplier = 1.25; // Peak scrolling hours
+  }
+
+  const mode = camp.delivery_mode || 'fresh_scurve';
+
+  if (mode === 'turbo') {
+    const remaining = totalViews - viewsDelivered;
+    const basePulse = Math.round(minViews * 4 + Math.random() * 400);
+    return {
+      pulseBurst: Math.max(minViews, Math.min(remaining, basePulse)),
+      saveRatio: 0.006 + Math.random() * 0.003,
+      commentRatio: 0.001 + Math.random() * 0.001,
+      shareRatio: 0.002 + Math.random() * 0.002,
+      baseSleepSecs: Math.round(600 + Math.random() * 500), // 10-18 mins
+      stageName: 'Turbo Mode'
+    };
+  }
+
+  if (mode === 'circadian') {
+    const remaining = totalViews - viewsDelivered;
+    const basePulse = Math.round(minViews + Math.random() * 200);
+    return {
+      pulseBurst: Math.max(minViews, Math.min(remaining, Math.round(basePulse * circadianMultiplier))),
+      saveRatio: 0.005 + Math.random() * 0.003,
+      commentRatio: 0.0008 + Math.random() * 0.0006,
+      shareRatio: 0.0015 + Math.random() * 0.0015,
+      baseSleepSecs: Math.round((1200 + Math.random() * 800) / circadianMultiplier), // 20-33 mins
+      stageName: 'Circadian Wave'
+    };
+  }
+
+  // DEFAULT & RECOMMENDED: 'fresh_scurve' (3-Stage Viral Growth for Fresh Clips & Content Rewards)
+  const remaining = totalViews - viewsDelivered;
+  if (progress < 0.15) {
+    // STAGE 1: SEED DISCOVERY PHASE (0% - 15%)
+    // Soft initial pulses with high early Save/Bookmark ratio (1.1% - 1.5%)
+    const basePulse = Math.round(minViews + Math.random() * 150);
+    const pulseBurst = Math.max(minViews, Math.min(remaining, Math.round(basePulse * circadianMultiplier)));
+    return {
+      pulseBurst,
+      saveRatio: 0.011 + Math.random() * 0.004,      // 1.1% - 1.5% (Early High-Trust Bookmarks)
+      commentRatio: 0.0006 + Math.random() * 0.0004, // 0.06% - 0.10%
+      shareRatio: 0.0010 + Math.random() * 0.0010,   // 0.10% - 0.20%
+      baseSleepSecs: Math.round((1380 + Math.random() * 540) / circadianMultiplier), // 23 - 32 mins
+      stageName: 'Stage 1: Seed Discovery'
+    };
+  } else if (progress < 0.80) {
+    // STAGE 2: FYP VIRAL BREAKOUT (15% - 80%)
+    // Exponential scale bursts mimicking algorithmic push
+    const scaleFactor = 1.8 + (progress * 2.0); // Scales up as viral velocity expands
+    const basePulse = Math.round(minViews * scaleFactor + Math.random() * 250);
+    const pulseBurst = Math.max(minViews, Math.min(remaining, Math.round(basePulse * circadianMultiplier)));
+    return {
+      pulseBurst,
+      saveRatio: 0.007 + Math.random() * 0.003,      // 0.70% - 1.00%
+      commentRatio: 0.0010 + Math.random() * 0.0008, // 0.10% - 0.18%
+      shareRatio: 0.0035 + Math.random() * 0.0020,   // 0.35% - 0.55%
+      baseSleepSecs: Math.round((1140 + Math.random() * 480) / circadianMultiplier), // 19 - 27 mins
+      stageName: 'Stage 2: FYP Viral Breakout'
+    };
+  } else {
+    // STAGE 3: PLATEAU & LONG-TAIL TAIL (80% - 100%)
+    // Soft landing, tapering smoothly to completion
+    const basePulse = Math.round(minViews + Math.random() * 180);
+    return {
+      pulseBurst: Math.max(Math.min(remaining, minViews), Math.min(remaining, basePulse)),
+      saveRatio: 0.005 + Math.random() * 0.002,      // 0.50% - 0.70%
+      commentRatio: 0.0007 + Math.random() * 0.0005, // 0.07% - 0.12%
+      shareRatio: 0.0015 + Math.random() * 0.0015,   // 0.15% - 0.30%
+      baseSleepSecs: Math.round((1440 + Math.random() * 720) / circadianMultiplier), // 24 - 36 mins
+      stageName: 'Stage 3: Viral Plateau'
+    };
+  }
+}
+
 async function runDripWorker(url, abortSignal) {
   const camp = state.campaigns[url];
   if (!camp) return;
 
   const titleDisplay = camp.video_title ? camp.video_title.slice(0, 40) : url.slice(-28);
-  logMsg(`🚀 [${camp.platform} / ${camp.delivery_mode}] Worker Active → ${titleDisplay} | ${camp.total_views} views target`, 'info', url);
+  logMsg(`🚀 [${camp.platform} / ${camp.delivery_mode || 'fresh_scurve'}] Worker Active → ${titleDisplay} | ${camp.total_views} views target`, 'info', url);
 
   // Initialize Deficit Accumulators if missing (Rule F: Fractional Deficit Pool)
   if (camp.likes_deficit === undefined) camp.likes_deficit = 0;
   if (camp.comments_deficit === undefined) camp.comments_deficit = 0;
   if (camp.shares_deficit === undefined) camp.shares_deficit = 0;
   if (camp.saves_deficit === undefined) camp.saves_deficit = 0;
-
-  const commentRatioLo = 0.0005;  // 0.05%
-  const commentRatioHi = 0.0010;  // 0.10%
-  const shareRatioLo = 0.0005;    // 0.05%
-  const shareRatioHi = 0.0015;    // 0.15%
-  const saveRatioLo = 0.0030;     // 0.30%
-  const saveRatioHi = 0.0080;     // 0.80%
 
   while (true) {
     if (abortSignal.aborted) {
@@ -497,37 +580,40 @@ async function runDripWorker(url, abortSignal) {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // 2-HOUR STUCK ORDER CHECK & AUTOMATIC PANEL CANCEL + CAMPAIGN HALT
+    // DUAL-VERIFICATION & PANEL ORDER STATUS CHECK
     // ─────────────────────────────────────────────────────────────────
     if (camp.last_view_order && camp.last_order_timestamp) {
       const ts = new Date(camp.last_order_timestamp).getTime();
       if (!isNaN(ts)) {
         const elapsedMs = Date.now() - ts;
-        const twoHoursMs = 2 * 60 * 60 * 1000;
 
-        if (elapsedMs >= twoHoursMs) {
-          try {
-            const status = await smmCheckOrder(camp.last_view_order);
-            logMsg(`🔍 Checking status for order #${camp.last_view_order} (Age: ${(elapsedMs / 3600000).toFixed(1)}h) → Panel Status: [${status}]`, 'info', url);
+        try {
+          const status = await smmCheckOrder(camp.last_view_order);
+          logMsg(`🔍 Live Order #${camp.last_view_order} Status: [${status}] (${(elapsedMs / 60000).toFixed(0)}m ago)`, 'info', url);
 
-            if (status === 'Pending' || status === 'In progress' || status === 'Processing') {
-              logMsg(`⚠️ Order #${camp.last_view_order} stuck in status [${status}] for >2 hours! Sending cancel request to SMM Panel and stopping campaign...`, 'warn', url);
-              try {
-                await smmCancelOrder(camp.last_view_order);
-                logMsg(`🚫 Sent API cancel request for order #${camp.last_view_order} to Marketerum panel`, 'warn', url);
-              } catch (err) {
-                logMsg(`⚠️ Panel cancel API notice: ${err.message}`, 'warn', url);
-              }
-              camp.last_view_order = null;
-              camp.status = 'Stopped';
-              activeWorkers.delete(url);
-              saveState();
-              broadcastEvent('campaign_update', url);
-              return;
+          if (status === 'Completed') {
+            camp.last_view_order = null; // Clean completion, ready for next pulse
+          } else if (status === 'Partial') {
+            logMsg(`🔄 Order #${camp.last_view_order} reported Partial delivery by panel — syncing deficit pool...`, 'info', url);
+            camp.last_view_order = null;
+          } else if (status === 'Canceled') {
+            logMsg(`⚠️ Order #${camp.last_view_order} was Canceled by SMM panel`, 'warn', url);
+            if (camp.backup_view_service && camp.backup_view_service !== camp.view_service) {
+              logMsg(`🛡️ [Auto-Failover] Switching from Service #${camp.view_service} to Backup Service #${camp.backup_view_service}!`, 'warn', url);
+              camp.view_service = camp.backup_view_service;
             }
-          } catch (err) {
-            logMsg(`⚠️ Could not check order status for #${camp.last_view_order}: ${err.message}`, 'warn', url);
+            camp.last_view_order = null;
+          } else if ((status === 'Pending' || status === 'In progress' || status === 'Processing') && elapsedMs > 45 * 60 * 1000) {
+            logMsg(`⚠️ Order #${camp.last_view_order} stuck in [${status}] for >45 mins!`, 'warn', url);
+            if (camp.backup_view_service && camp.backup_view_service !== camp.view_service) {
+              try { await smmCancelOrder(camp.last_view_order); } catch (e) {}
+              logMsg(`🛡️ [Auto-Failover] Switching to Backup View Service #${camp.backup_view_service}`, 'warn', url);
+              camp.view_service = camp.backup_view_service;
+              camp.last_view_order = null;
+            }
           }
+        } catch (err) {
+          logMsg(`⚠️ Order status check notice: ${err.message}`, 'warn', url);
         }
       }
     }
@@ -544,38 +630,40 @@ async function runDripWorker(url, abortSignal) {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // RULE B: CIRCADIAN WAVE SCALING (Night = -60%, Peak = +20%)
+    // DYNAMIC PACING PROFILE & 3-STAGE S-CURVE EXECUTION
     // ─────────────────────────────────────────────────────────────────
-    let waveMultiplier = 1.0;
-    if (currentHour >= 1 && currentHour <= 6) {
-      waveMultiplier = 0.40; // Sleeping hours: scale down 60%
-    } else if ((currentHour >= 12 && currentHour <= 14) || (currentHour >= 18 && currentHour <= 22)) {
-      waveMultiplier = 1.20; // Peak scrolling hours: scale up 20%
-    }
+    const profile = calculatePacingProfile(camp);
+    const pulseBurst = profile.pulseBurst;
+    camp.current_stage = profile.stageName;
 
-    const viewsRemaining = camp.total_views - camp.views_delivered;
-    const minViews = getServiceMin(camp.view_service, 100);
-    const basePulse = Math.round(minViews + Math.random() * 150);
-    const pulseBurst = Math.min(viewsRemaining, Math.max(minViews, Math.round(basePulse * waveMultiplier)));
-
-    if (camp.view_service) {
+    if (camp.view_service && pulseBurst > 0) {
       const void_id = await smmPlaceOrderWithRetry(camp.view_service, url, pulseBurst, 'VIEWS');
       if (void_id) {
         camp.last_view_order = void_id;
         camp.last_order_timestamp = new Date().toISOString();
         camp.views_delivered += pulseBurst;
 
-        // ─────────────────────────────────────────────────────────────
-        // RULE F: FRACTIONAL DEFICIT POOL ACCUMULATION
-        // ─────────────────────────────────────────────────────────────
-        const userRate = (camp.engagement_rate || 2.2) / 100;
-        camp.likes_deficit += pulseBurst * userRate;
-        camp.comments_deficit += pulseBurst * (commentRatioLo + Math.random() * (commentRatioHi - commentRatioLo));
-        camp.shares_deficit += pulseBurst * (shareRatioLo + Math.random() * (shareRatioHi - shareRatioLo));
-        camp.saves_deficit += pulseBurst * (saveRatioLo + Math.random() * (saveRatioHi - saveRatioLo));
+        // Dynamic Gaussian jitter on user engagement rate (±0.25% variance)
+        const baseRate = (camp.engagement_rate || 2.8) / 100;
+        const jitteredRate = Math.max(0.015, baseRate + (Math.random() * 0.005 - 0.0025));
+
+        camp.likes_deficit += pulseBurst * jitteredRate;
+        camp.comments_deficit += pulseBurst * profile.commentRatio;
+        camp.shares_deficit += pulseBurst * profile.shareRatio;
+        camp.saves_deficit += pulseBurst * profile.saveRatio;
 
         saveState();
         broadcastEvent('campaign_update', url);
+
+        // ─────────────────────────────────────────────────────────────
+        // REACTION LAG STAGGER: Wait 2-4 mins for realistic human watch time
+        // ─────────────────────────────────────────────────────────────
+        const staggerSecs = Math.round(120 + Math.random() * 120); // 2 - 4 minutes
+        logMsg(`⏳ [Reaction Stagger] View burst (${pulseBurst}) registered — waiting ${staggerSecs}s for human reaction lag before firing reactions...`, 'info', url);
+        for (let w = 0; w < staggerSecs; w++) {
+          if (abortSignal.aborted) return;
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
     }
 
@@ -632,7 +720,15 @@ async function runDripWorker(url, abortSignal) {
       }
     }
 
-    let sleepSecs = Math.round((900 + Math.random() * 1800) / waveMultiplier);
+    // ─────────────────────────────────────────────────────────────
+    // POISSON-DISTRIBUTED JITTER INTERVAL (Eliminates metronomes)
+    // ─────────────────────────────────────────────────────────────
+    const lambda = profile.baseSleepSecs || 1200;
+    const u = Math.max(0.0001, Math.random());
+    let sleepSecs = Math.round(-Math.log(u) * (lambda * 0.6) + (lambda * 0.4));
+    sleepSecs = Math.max(840, Math.min(2400, sleepSecs)); // Clamped between 14m and 40m
+
+    logMsg(`💤 Pulse complete [${profile.stageName}] — next pulse in ${(sleepSecs / 60).toFixed(1)} mins`, 'info', url);
     for (let s = 0; s < sleepSecs; s++) {
       if (abortSignal.aborted) return;
       await new Promise(r => setTimeout(r, 1000));

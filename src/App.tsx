@@ -201,14 +201,17 @@ function CampaignsTab() {
   const [activePanels, setActivePanels] = useState<Record<string, 'analytics' | 'logs' | 'details' | null>>({});
 
   const [form, setForm] = useState({
-    url: '', platform: 'TikTok', delivery_mode: 'Organic Growth',
+    url: '', platform: 'TikTok', delivery_mode: 'fresh_scurve',
+    backup_view_service: '',
     view_service: '', like_service: '', comment_service: '',
     share_service: '', save_service: '',
-    total_views: '10000', days_to_run: '7', engagement_rate: '2.2', peak_only: false,
+    total_views: '10000', days_to_run: '7', engagement_rate: '2.8', peak_only: false,
   });
 
   const [editForm, setEditForm] = useState({
-    total_views: '10000', days_to_run: '7', engagement_rate: '2.2',
+    total_views: '10000', days_to_run: '7', engagement_rate: '2.8',
+    delivery_mode: 'fresh_scurve',
+    backup_view_service: '',
     view_service: '', like_service: '', comment_service: '',
     share_service: '', save_service: '', peak_only: false,
   });
@@ -233,7 +236,9 @@ function CampaignsTab() {
     setEditForm({
       total_views: String(c.total_views || 10000),
       days_to_run: String(c.days_to_run || 7),
-      engagement_rate: String(c.engagement_rate || 2.2),
+      engagement_rate: String(c.engagement_rate || 2.8),
+      delivery_mode: c.delivery_mode || 'fresh_scurve',
+      backup_view_service: c.backup_view_service || '',
       view_service: c.view_service || '',
       like_service: c.like_service || '',
       comment_service: c.comment_service || '',
@@ -250,7 +255,9 @@ function CampaignsTab() {
       const payload: Record<string, unknown> = {
         total_views: parseInt(editForm.total_views) || 10000,
         days_to_run: parseFloat(editForm.days_to_run) || 7.0,
-        engagement_rate: parseFloat(editForm.engagement_rate) || 2.2,
+        engagement_rate: parseFloat(editForm.engagement_rate) || 2.8,
+        delivery_mode: editForm.delivery_mode || 'fresh_scurve',
+        backup_view_service: editForm.backup_view_service || '',
         view_service: editForm.view_service,
         like_service: editForm.like_service,
         comment_service: editForm.comment_service,
@@ -347,7 +354,9 @@ function CampaignsTab() {
         ...form,
         total_views: parseInt(form.total_views) || 10000,
         days_to_run: parseFloat(form.days_to_run) || 7.0,
-        engagement_rate: parseFloat(form.engagement_rate) || 2.2,
+        engagement_rate: parseFloat(form.engagement_rate) || 2.8,
+        delivery_mode: form.delivery_mode || 'fresh_scurve',
+        backup_view_service: form.backup_view_service || '',
       };
       if (meta) {
         payload.video_title = meta.title;
@@ -461,6 +470,7 @@ function CampaignsTab() {
                           {c.status}
                         </span>
                         <span className="term-badge term-badge-cyan">{c.platform}</span>
+                        <span className="term-badge term-badge-cyan">{c.current_stage || (c.delivery_mode === 'turbo' ? 'Turbo Boost' : c.delivery_mode === 'circadian' ? 'Circadian Wave' : 'Seed Discovery')}</span>
                         <span className={`term-badge ${safetyBadgeClass}`}>{safetyLabel}</span>
                       </div>
                       <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -520,10 +530,12 @@ function CampaignsTab() {
                 {activePanel === 'details' && (
                   <div style={{ padding: '14px', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '12px', marginTop: '14px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div style={{ color: 'var(--text-secondary)' }}>View SVC: <strong style={{ color: 'var(--accent-cyan)' }}>#{c.view_service || 'N/A'}</strong></div>
+                    <div style={{ color: 'var(--text-secondary)' }}>Backup SVC: <strong style={{ color: 'var(--accent-cyan)' }}>#{c.backup_view_service || 'None'}</strong></div>
                     <div style={{ color: 'var(--text-secondary)' }}>Like SVC: <strong style={{ color: 'var(--accent-cyan)' }}>#{c.like_service || 'N/A'}</strong></div>
                     <div style={{ color: 'var(--text-secondary)' }}>Comment SVC: <strong style={{ color: 'var(--accent-cyan)' }}>#{c.comment_service || 'N/A'}</strong></div>
                     <div style={{ color: 'var(--text-secondary)' }}>Share SVC: <strong style={{ color: 'var(--accent-cyan)' }}>#{c.share_service || 'N/A'}</strong></div>
                     <div style={{ color: 'var(--text-secondary)' }}>Save SVC: <strong style={{ color: 'var(--accent-cyan)' }}>#{c.save_service || 'N/A'}</strong></div>
+                    <div style={{ color: 'var(--text-secondary)' }}>Delivery Mode: <strong style={{ color: 'var(--accent-cyan)' }}>{c.delivery_mode || 'fresh_scurve'}</strong></div>
                     <div style={{ color: 'var(--text-secondary)' }}>Safety: <strong style={{ color: pctNum > 7.0 ? 'var(--error)' : 'var(--success)' }}>{safetyLabel}</strong></div>
                   </div>
                 )}
@@ -547,6 +559,14 @@ function CampaignsTab() {
 
             <div className="term-section-box">
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '12px' }}>Pacing & Targets</div>
+              <div className="term-field-group">
+                <label className="term-field-lbl">Delivery Profile (Audit Shield)</label>
+                <select className="term-input" value={editForm.delivery_mode || 'fresh_scurve'} onChange={e => setEditForm({ ...editForm, delivery_mode: e.target.value })}>
+                  <option value="fresh_scurve">🌟 Fresh Post 3-Stage Viral S-Curve (Content Rewards Recommended)</option>
+                  <option value="circadian">🌊 Circadian 24h Wave (Standard)</option>
+                  <option value="turbo">⚡ Turbo Fast (Immediate Viral Push)</option>
+                </select>
+              </div>
               <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Target Views</label>
@@ -571,7 +591,7 @@ function CampaignsTab() {
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '12px' }}>Service Routing</div>
               <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div className="term-field-group">
-                  <label className="term-field-lbl">View Service</label>
+                  <label className="term-field-lbl">Primary View Service</label>
                   <select className="term-input" value={editForm.view_service} onChange={e => setEditForm({ ...editForm, view_service: e.target.value })}>
                     <option value="">Select...</option>
                     {services.map(s => (
@@ -581,6 +601,19 @@ function CampaignsTab() {
                     ))}
                   </select>
                 </div>
+                <div className="term-field-group">
+                  <label className="term-field-lbl">Backup View Service (Auto-Failover)</label>
+                  <select className="term-input" value={editForm.backup_view_service || ''} onChange={e => setEditForm({ ...editForm, backup_view_service: e.target.value })}>
+                    <option value="">None (Single Provider)</option>
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Like Service</label>
                   <select className="term-input" value={editForm.like_service} onChange={e => setEditForm({ ...editForm, like_service: e.target.value })}>
@@ -592,8 +625,6 @@ function CampaignsTab() {
                     ))}
                   </select>
                 </div>
-              </div>
-              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Comment SVC</label>
                   <select className="term-input" value={editForm.comment_service} onChange={e => setEditForm({ ...editForm, comment_service: e.target.value })}>
@@ -605,6 +636,8 @@ function CampaignsTab() {
                     ))}
                   </select>
                 </div>
+              </div>
+              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Share SVC</label>
                   <select className="term-input" value={editForm.share_service} onChange={e => setEditForm({ ...editForm, share_service: e.target.value })}>
@@ -677,6 +710,14 @@ function CampaignsTab() {
             {/* Section 2: Pacing */}
             <div className="term-section-box">
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '12px' }}>2. Pacing & Goals</div>
+              <div className="term-field-group">
+                <label className="term-field-lbl">Delivery Profile (Audit Shield)</label>
+                <select className="term-input" value={form.delivery_mode || 'fresh_scurve'} onChange={e => setForm({ ...form, delivery_mode: e.target.value })}>
+                  <option value="fresh_scurve">🌟 Fresh Post 3-Stage Viral S-Curve (Content Rewards Recommended)</option>
+                  <option value="circadian">🌊 Circadian 24h Wave (Standard)</option>
+                  <option value="turbo">⚡ Turbo Fast (Immediate Viral Push)</option>
+                </select>
+              </div>
               <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Platform</label>
@@ -711,7 +752,7 @@ function CampaignsTab() {
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '12px' }}>3. Service Routing</div>
               <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
-                  <label className="term-field-lbl">View Service *</label>
+                  <label className="term-field-lbl">Primary View Service *</label>
                   <select className="term-input" value={form.view_service} onChange={e => setForm({ ...form, view_service: e.target.value })}>
                     <option value="">Select...</option>
                     {services.map(s => (
@@ -721,6 +762,19 @@ function CampaignsTab() {
                     ))}
                   </select>
                 </div>
+                <div className="term-field-group">
+                  <label className="term-field-lbl">Backup View Service (Auto-Failover)</label>
+                  <select className="term-input" value={form.backup_view_service || ''} onChange={e => setForm({ ...form, backup_view_service: e.target.value })}>
+                    <option value="">None (Single Provider)</option>
+                    {services.map(s => (
+                      <option key={s.id} value={s.service_id}>
+                        [{s.service_id}] {s.name} — Min: {s.min_order?.toLocaleString() || '1'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Like Service</label>
                   <select className="term-input" value={form.like_service} onChange={e => setForm({ ...form, like_service: e.target.value })}>
@@ -732,8 +786,6 @@ function CampaignsTab() {
                     ))}
                   </select>
                 </div>
-              </div>
-              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Comment SVC</label>
                   <select className="term-input" value={form.comment_service} onChange={e => setForm({ ...form, comment_service: e.target.value })}>
@@ -745,6 +797,8 @@ function CampaignsTab() {
                     ))}
                   </select>
                 </div>
+              </div>
+              <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Share SVC</label>
                   <select className="term-input" value={form.share_service} onChange={e => setForm({ ...form, share_service: e.target.value })}>

@@ -15,7 +15,9 @@ export interface Campaign {
   url: string;
   platform: string;
   delivery_mode: string;
+  current_stage?: string;
   view_service: string;
+  backup_view_service?: string;
   like_service: string;
   comment_service: string;
   share_service: string;
