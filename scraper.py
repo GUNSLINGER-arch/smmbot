@@ -1,12 +1,5 @@
 import sys
 import os
-import glob
-
-# Guarantee updated 2026 yt-dlp package from ~/.local/ is loaded first
-for ls in glob.glob(os.path.expanduser('~/.local/lib/python*/site-packages')):
-    if os.path.exists(ls) and ls not in sys.path:
-        sys.path.insert(0, ls)
-
 import json
 import re
 import urllib.request
@@ -18,7 +11,7 @@ sys.stderr = open(os.devnull, 'w')
 APIFY_KEYS_DEFAULT = []
 
 def get_apify_keys():
-    """Load Apify tokens from apify_keys.json or env or default pool."""
+    """Load Apify tokens from apify_keys.json or env variable."""
     keys = list(APIFY_KEYS_DEFAULT)
     key_file = os.path.join(os.path.dirname(__file__), "apify_keys.json")
     if os.path.exists(key_file):
@@ -39,160 +32,21 @@ def get_apify_keys():
                 keys.append(k)
     return keys
 
-def parse_count(s):
-    if not s: return 0
-    s = str(s).replace(',', '').strip().upper()
-    mult = 1
-    if s.endswith('K'): mult = 1000; s = s[:-1]
-    elif s.endswith('M'): mult = 1000000; s = s[:-1]
-    elif s.endswith('B'): mult = 1000000000; s = s[:-1]
-    try: return int(float(s) * mult)
-    except: return 0
-
-def extract_from_dict(d, keys):
-    if not isinstance(d, dict): return None
-    for k in keys:
-        if k in d and d[k] is not None: return d[k]
-    for v in d.values():
-        if isinstance(v, dict):
-            res = extract_from_dict(v, keys)
-            if res is not None: return res
-        elif isinstance(v, list):
-            for item in v:
-                if isinstance(item, dict):
-                    res = extract_from_dict(item, keys)
-                    if res is not None: return res
-    return None
-
-def extract_instagram_direct(url, proxy_url=None):
+def scrape_via_apify_api(url, platform):
     """
-    High-performance Instagram Reel scraper engine (from SCRAPER INTA API).
-    Uses Web Client signatures (X-IG-App-ID, X-ASBD-ID) and GraphQL Doc IDs.
-    Extracts Plays (primary counted metric for bounties/rewards), Views, Likes, Comments, and Author.
-    """
-    m = re.search(r"/(?:reel|reels|p|tv|share)/([A-Za-z0-9_-]+)", url)
-    if not m:
-        clean = url.strip("/").split("/")[-1].split("?")[0]
-        shortcode = clean if re.match(r"^[A-Za-z0-9_-]{5,20}$", clean) else None
-    else:
-        shortcode = m.group(1)
-
-    if not shortcode:
-        return None
-
-    canonical_url = f"https://www.instagram.com/reel/{shortcode}/"
-    res_data = {
-        'title': '',
-        'author': '',
-        'views': None,
-        'likes': None,
-        'comments': None,
-        'shares': None,
-        'saves': None,
-        'source': 'none'
-    }
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'X-IG-App-ID': '936619743392459',
-        'X-ASBD-ID': '198387',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'Referer': canonical_url
-    }
-
-    # Build proxy opener if proxy provided
-    opener = None
-    if proxy_url and proxy_url != "null":
-        try:
-            proxy_handler = urllib.request.ProxyHandler({'http': proxy_url, 'https': proxy_url})
-            opener = urllib.request.build_opener(proxy_handler)
-        except Exception:
-            opener = None
-
-    def fetch_url(r, timeout=6):
-        if opener:
-            return opener.open(r, timeout=timeout)
-        return urllib.request.urlopen(r, timeout=timeout)
-
-    # Strategy 1: GraphQL Web Client API (Direct data extraction)
-    graphql_doc_ids = ["10015901848480474", "8845758582119845", "25531498899829322", "7692226297508922"]
-    for doc_id in graphql_doc_ids:
-        try:
-            params = urllib.parse.urlencode({'doc_id': doc_id, 'variables': json.dumps({'shortcode': shortcode})})
-            endpoint = f"https://www.instagram.com/graphql/query/?{params}"
-            req = urllib.request.Request(endpoint, headers=headers)
-            with fetch_url(req, timeout=6) as res:
-                if res.status == 200:
-                    payload = json.loads(res.read().decode('utf-8'))
-                    media = payload.get('data', {}).get('xdt_shortcode_media') or payload.get('data', {}).get('shortcode_media')
-                    if media:
-                        # PLAYS COUNT IS PRIMARY FOR REELS (Counted by Content Rewards / Bounty platforms)
-                        plays = media.get('video_play_count') or media.get('play_count')
-                        views = plays or media.get('video_view_count') or media.get('view_count')
-                        likes = (media.get('edge_media_preview_like', {}).get('count') or media.get('edge_liked_by', {}).get('count'))
-                        comments = (media.get('edge_media_to_parent_comment', {}).get('count') or media.get('edge_media_to_comment', {}).get('count'))
-                        caption_edges = media.get('edge_media_to_caption', {}).get('edges', [])
-                        caption = caption_edges[0].get('node', {}).get('text', '') if caption_edges else media.get('caption', '')
-                        owner = media.get('owner', {})
-
-                        res_data.update({
-                            'title': (caption or '').split('\n')[0][:120],
-                            'author': owner.get('username') or owner.get('full_name', ''),
-                            'views': views,
-                            'likes': likes,
-                            'comments': comments,
-                            'source': 'direct_graphql'
-                        })
-                        return res_data
-        except Exception:
-            pass
-
-    # Strategy 2: Direct __a=1 JSON endpoint
-    try:
-        json_url = f"https://www.instagram.com/reel/{shortcode}/?__a=1&__d=dis"
-        req = urllib.request.Request(json_url, headers=headers)
-        with fetch_url(req, timeout=6) as res:
-            if res.status == 200:
-                payload = json.loads(res.read().decode('utf-8'))
-                items = payload.get('items', [])
-                if items:
-                    item = items[0]
-                    plays = item.get('play_count') or item.get('video_play_count')
-                    views = plays or item.get('view_count') or item.get('video_view_count')
-                    likes = item.get('like_count')
-                    comments = item.get('comment_count')
-                    caption = item.get('caption', {}).get('text', '') if item.get('caption') else ''
-                    res_data.update({
-                        'title': (caption or '').split('\n')[0][:120],
-                        'author': item.get('user', {}).get('username', ''),
-                        'views': views,
-                        'likes': likes,
-                        'comments': comments,
-                        'source': 'direct_json'
-                    })
-                    return res_data
-    except Exception:
-        pass
-
-    return None
-
-def extract_via_apify(url, platform):
-    """
-    Tier 2 Cloud Scraper via Apify Multi-Key Rotation Pool.
-    Bypasses all IP bans, geo-restrictions, and captchas.
+    Dedicated 100% Cloud API Scraper via Apify Multi-Key Rotation Pool.
+    Zero local scraping flakiness, zero IP bans, exact metrics extraction.
     """
     keys = get_apify_keys()
     if not keys:
         return None
 
+    is_instagram = platform == "Instagram" or "instagram.com" in url
+    is_tiktok = platform == "TikTok" or "tiktok.com" in url
+
     for token in keys:
         try:
-            if platform == "Instagram" or "instagram.com" in url:
+            if is_instagram:
                 actor_id = "apify/instagram-scraper"
                 run_url = f"https://api.apify.com/v2/acts/{urllib.parse.quote(actor_id, safe='')}/run-sync-get-dataset-items?token={token}&timeout=45"
                 payload = {"directUrls": [url], "resultsType": "posts"}
@@ -203,23 +57,24 @@ def extract_via_apify(url, platform):
                         items = json.loads(res.read().decode('utf-8'))
                         if items and len(items) > 0:
                             item = items[0]
+                            # Prioritize play count as primary view counter for Instagram Reels
                             plays = item.get('videoPlayCount') or item.get('plays') or item.get('playsInstagram')
-                            views = plays or item.get('videoViewCount') or item.get('views')
+                            views = plays if (plays is not None and plays > 0) else (item.get('videoViewCount') or item.get('views'))
                             likes = item.get('likesCount') or item.get('likes')
                             comments = item.get('commentsCount') or item.get('comments')
-                            author = item.get('ownerUsername') or item.get('ownerFullName') or item.get('profileHandle')
+                            author = item.get('ownerUsername') or item.get('ownerFullName') or item.get('profileHandle') or ''
                             caption = item.get('caption') or item.get('title') or ''
                             return {
                                 'title': (caption or '').split('\n')[0][:120],
-                                'author': author or '',
+                                'author': author,
                                 'views': views,
                                 'likes': likes,
                                 'comments': comments,
-                                'shares': item.get('shares') or item.get('shareCount'),
-                                'saves': item.get('saves') or item.get('savedCount'),
-                                'source': 'apify_instagram'
+                                'shares': item.get('shares') or item.get('shareCount') or None,
+                                'saves': item.get('saves') or item.get('savedCount') or None,
+                                'source': 'apify_api'
                             }
-            elif platform == "TikTok" or "tiktok.com" in url:
+            elif is_tiktok:
                 actor_id = "S5h7zRLfKFEr8pdj7"
                 run_url = f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items?token={token}&timeout=45"
                 payload = {"postURLs": [url]}
@@ -245,10 +100,12 @@ def extract_via_apify(url, platform):
                                 'comments': comments,
                                 'shares': shares,
                                 'saves': saves,
-                                'source': 'apify_tiktok'
+                                'source': 'apify_api'
                             }
         except Exception:
+            # On token depletion / rate-limit, seamlessly rotate to next key in pool
             continue
+
     return None
 
 def main():
@@ -257,7 +114,6 @@ def main():
         return
     url = sys.argv[1]
     platform = sys.argv[2]
-    proxy_url = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
 
     meta = {
         'title': '',
@@ -270,71 +126,12 @@ def main():
         'source': 'none'
     }
 
-    # Step 1: Direct Scraper (Zero-cost, ultra-fast ~1.5s)
-    if platform == "Instagram" or "instagram.com" in url:
-        try:
-            insta_direct = extract_instagram_direct(url, proxy_url)
-            if insta_direct and (insta_direct.get('views') is not None or insta_direct.get('likes') is not None):
-                meta.update(insta_direct)
-        except Exception:
-            pass
+    # Step 1: Pure API Scraper Method (100% Reliable Cloud Execution)
+    api_data = scrape_via_apify_api(url, platform)
+    if api_data:
+        meta.update(api_data)
 
-    # Step 2: Primary extraction for TikTok via yt-dlp
-    if (platform == "TikTok" or "tiktok.com" in url) or (meta.get('views') is None or meta.get('likes') is None or not meta.get('title')):
-        try:
-            import yt_dlp
-            class QuietLogger:
-                def debug(self, msg): pass
-                def warning(self, msg): pass
-                def error(self, msg): pass
-
-            opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'logger': QuietLogger(),
-                'skip_download': True,
-                'socket_timeout': 10,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5'
-                }
-            }
-            if proxy_url and proxy_url != "null":
-                opts['proxy'] = proxy_url
-
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-            
-            if info and (info.get('title') or info.get('view_count')):
-                saves_val = (
-                    info.get('collect_count') or info.get('bookmark_count') or
-                    info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
-                )
-                views_val = info.get('play_count') or info.get('view_count') or meta.get('views')
-                meta.update({
-                    'title': meta.get('title') or info.get('title', ''),
-                    'author': meta.get('author') or info.get('uploader') or info.get('channel', ''),
-                    'views': views_val,
-                    'likes': info.get('like_count') or meta.get('likes'),
-                    'comments': info.get('comment_count') or meta.get('comments'),
-                    'shares': info.get('repost_count') or info.get('share_count') or meta.get('shares'),
-                    'saves': saves_val or meta.get('saves'),
-                    'source': meta.get('source') if meta.get('source') != 'none' else 'yt-dlp'
-                })
-        except Exception:
-            pass
-
-    # Step 3: Tier 2 Cloud Scraper via Apify Multi-Key Rotation Pool (if direct failed or views == 0)
-    if meta.get('views') is None or meta.get('views') == 0:
-        try:
-            apify_meta = extract_via_apify(url, platform)
-            if apify_meta and apify_meta.get('views') is not None and apify_meta.get('views') > 0:
-                meta.update(apify_meta)
-        except Exception:
-            pass
-
-    # Step 4: OEMBED Fallback for Title & Author
+    # Step 2: OEMBED Fallback for Title & Author if API didn't return them
     if not meta.get('title') or not meta.get('author'):
         try:
             if "tiktok.com" in url or platform == "TikTok":
@@ -345,7 +142,6 @@ def main():
                     if oe_data.get('title'):
                         meta['title'] = meta['title'] or oe_data.get('title', '')
                         meta['author'] = meta['author'] or oe_data.get('author_name', '')
-                        if meta['source'] == 'none': meta['source'] = 'tiktok-oembed'
             elif "instagram.com" in url or platform == "Instagram":
                 oe_url = f"https://api.instagram.com/oembed/?url={urllib.parse.quote(url)}"
                 req = urllib.request.Request(oe_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -354,11 +150,10 @@ def main():
                     if oe_data.get('author_name') or oe_data.get('title'):
                         meta['title'] = meta['title'] or oe_data.get('title', '')
                         meta['author'] = meta['author'] or oe_data.get('author_name', '')
-                        if meta['source'] == 'none': meta['source'] = 'instagram-oembed'
         except Exception:
             pass
 
-    # Step 5: Guarantee clean titles & baseline fallback values
+    # Step 3: Guarantee clean titles & baseline fallback values
     if not meta.get('title') or meta['title'].strip() == '':
         clean_id = url.split('/')[-1].split('?')[0] if '/' in url else 'post'
         meta['title'] = f"{platform} Video ({clean_id})"
