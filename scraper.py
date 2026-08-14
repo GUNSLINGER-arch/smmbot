@@ -220,8 +220,8 @@ def extract_via_apify(url, platform):
                                 'source': 'apify_instagram'
                             }
             elif platform == "TikTok" or "tiktok.com" in url:
-                actor_id = "clockworks/free-tiktok-scraper"
-                run_url = f"https://api.apify.com/v2/acts/{urllib.parse.quote(actor_id, safe='')}/run-sync-get-dataset-items?token={token}&timeout=45"
+                actor_id = "S5h7zRLfKFEr8pdj7"
+                run_url = f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items?token={token}&timeout=45"
                 payload = {"postURLs": [url]}
                 data_bytes = json.dumps(payload).encode('utf-8')
                 req = urllib.request.Request(run_url, data=data_bytes, headers={'Content-Type': 'application/json'})
