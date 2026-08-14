@@ -181,14 +181,17 @@ async function findWorkingProxy() {
 // ─────────────────────────────────────────────────────────────────
 let cachedBalance = null;
 let cachedBalanceTime = 0;
+let cachedServices = null;
+let cachedServicesTime = 0;
 
-async function smmApiCall(action, params = {}, customKey = null, customUrl = null) {
+async function smmApiCall(action, params = {}, customKey = null, customUrl = null, timeoutMs = 8000) {
   const key = customKey || state.api_key;
   const url = customUrl || state.api_url || 'https://marketerum.com/api/v2';
   if (!key) throw new Error('API key is empty. Please enter and save your Marketerum API key in Settings.');
 
   const payload = new URLSearchParams({ key, action, ...params });
   const cfg = getRequestConfig({ 'Content-Type': 'application/x-www-form-urlencoded' }, false);
+  cfg.timeout = timeoutMs;
   const res = await axios.post(url, payload.toString(), cfg);
   return res.data;
 }
@@ -198,7 +201,7 @@ async function smmGetBalance(customKey = null, customUrl = null) {
   if (!customKey && cachedBalance && (now - cachedBalanceTime < 10000)) {
     return cachedBalance;
   }
-  const data = await smmApiCall('balance', {}, customKey, customUrl);
+  const data = await smmApiCall('balance', {}, customKey, customUrl, 6000);
   if (data.error) throw new Error(data.error);
   const result = { balance: parseFloat(data.balance || 0), currency: data.currency || 'USD' };
   if (!customKey) {
@@ -208,9 +211,17 @@ async function smmGetBalance(customKey = null, customUrl = null) {
   return result;
 }
 
-async function smmGetServices() {
-  const data = await smmApiCall('services');
-  if (Array.isArray(data)) return data;
+async function smmGetServices(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedServices && (now - cachedServicesTime < 180000)) {
+    return cachedServices;
+  }
+  const data = await smmApiCall('services', {}, null, null, 25000);
+  if (Array.isArray(data)) {
+    cachedServices = data;
+    cachedServicesTime = now;
+    return data;
+  }
   if (data.error) throw new Error(data.error);
   return [];
 }
