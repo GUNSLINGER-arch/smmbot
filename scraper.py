@@ -12,7 +12,7 @@ import re
 import urllib.request
 import urllib.parse
 
-# Redirect stderr to devnull so library errors (yt-dlp/instaloader) never pollute stdout
+# Redirect stderr to devnull so library output never pollutes JSON stdout
 sys.stderr = open(os.devnull, 'w')
 
 def parse_count(s):
@@ -42,8 +42,9 @@ def extract_from_dict(d, keys):
 
 def extract_instagram_direct(url, proxy_url=None):
     """
-    Direct multi-tiered extractor for Instagram Reels inspired by SCRAPER INTA API.
-    Extracts Plays (primary counted metric on Reels), Views, Likes, Comments, Shares, and Author.
+    High-performance Instagram Reel scraper engine (from SCRAPER INTA API).
+    Uses Web Client signatures (X-IG-App-ID, X-ASBD-ID) and GraphQL Doc IDs.
+    Extracts Plays (primary counted metric for bounties/rewards), Views, Likes, Comments, and Author.
     """
     m = re.search(r"/(?:reel|reels|p|tv|share)/([A-Za-z0-9_-]+)", url)
     if not m:
@@ -74,10 +75,13 @@ def extract_instagram_direct(url, proxy_url=None):
         'X-IG-App-ID': '936619743392459',
         'X-ASBD-ID': '198387',
         'X-Requested-With': 'XMLHttpRequest',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
         'Referer': canonical_url
     }
 
-    # Strategy 1: GraphQL Web Client API (doc_ids from SCRAPER INTA API)
+    # Strategy 1: GraphQL Web Client API (Direct data extraction)
     graphql_doc_ids = ["10015901848480474", "8845758582119845", "25531498899829322", "7692226297508922"]
     for doc_id in graphql_doc_ids:
         try:
@@ -89,7 +93,7 @@ def extract_instagram_direct(url, proxy_url=None):
                     payload = json.loads(res.read().decode('utf-8'))
                     media = payload.get('data', {}).get('xdt_shortcode_media') or payload.get('data', {}).get('shortcode_media')
                     if media:
-                        # PLAYS COUNT IS PRIMARY FOR REELS (Counted by Content Rewards / Bounty checks)
+                        # PLAYS COUNT IS PRIMARY FOR REELS (Counted by Content Rewards / Bounty platforms)
                         plays = media.get('video_play_count') or media.get('play_count')
                         views = plays or media.get('video_view_count') or media.get('view_count')
                         likes = (media.get('edge_media_preview_like', {}).get('count') or media.get('edge_liked_by', {}).get('count'))
@@ -158,7 +162,7 @@ def main():
         'source': 'none'
     }
 
-    # Step 1: If Instagram, attempt direct GraphQL/JSON extractor first
+    # Step 1: If Instagram, run the new direct GraphQL/JSON engine first
     if platform == "Instagram" or "instagram.com" in url:
         try:
             insta_direct = extract_instagram_direct(url, proxy_url)
@@ -167,7 +171,7 @@ def main():
         except Exception:
             pass
 
-    # Step 2: Primary extraction via yt-dlp (TikTok & Instagram fallback)
+    # Step 2: Primary extraction for TikTok / secondary fallback via yt-dlp
     if meta.get('views') is None or meta.get('likes') is None or not meta.get('title'):
         try:
             import yt_dlp
@@ -199,7 +203,6 @@ def main():
                     info.get('collect_count') or info.get('bookmark_count') or
                     info.get('save_count') or extract_from_dict(info, ['collectCount', 'bookmarkCount'])
                 )
-                # Prioritize play_count on reels if available
                 views_val = info.get('play_count') or info.get('view_count') or meta.get('views')
                 meta.update({
                     'title': meta.get('title') or info.get('title', ''),
@@ -214,43 +217,7 @@ def main():
         except Exception:
             pass
 
-    # Step 3: Instaloader for Instagram (extract node play_count & view_count)
-    if (platform == "Instagram" or "instagram.com" in url) and (meta.get('views') is None or meta.get('likes') is None):
-        try:
-            import instaloader
-            L = instaloader.Instaloader(quiet=True, download_pictures=False, download_videos=False, download_video_thumbnails=False, compress_json=False, save_metadata=False)
-            if proxy_url and proxy_url != "null":
-                L.context._session.proxies = {'http': proxy_url, 'https': proxy_url}
-            
-            m = re.search(r'/(?:reel|reels|p|tv|share)/([A-Za-z0-9_-]+)/?', url)
-            if m:
-                shortcode = m.group(1)
-                post = instaloader.Post.from_shortcode(L.context, shortcode)
-                saves_count = None
-                plays_count = None
-                try:
-                    node = post._node if hasattr(post, '_node') else {}
-                    plays_count = node.get('video_play_count') or node.get('play_count')
-                    saves_count = node.get('saved_count') or node.get('bookmark_count') or node.get('save_count')
-                except Exception:
-                    pass
-
-                views_val = plays_count or (post.video_view_count if post.is_video else None) or meta.get('views')
-
-                meta.update({
-                    "views": views_val,
-                    "likes": post.likes if post.likes else meta.get('likes'),
-                    "comments": post.comments if post.comments else meta.get('comments'),
-                    "shares": getattr(post, 'share_count', None) or meta.get('shares'),
-                    "saves": saves_count or meta.get('saves'),
-                    "title": meta.get('title') or ((post.caption or '').split('\n')[0][:120] if post.caption else None),
-                    "author": meta.get('author') or post.owner_username,
-                    "source": "instaloader"
-                })
-        except Exception:
-            pass
-
-    # Step 4: OEMBED Fallback for Title & Author
+    # Step 3: OEMBED Fallback for Title & Author
     if not meta.get('title') or not meta.get('author'):
         try:
             if "tiktok.com" in url or platform == "TikTok":
@@ -274,7 +241,7 @@ def main():
         except Exception:
             pass
 
-    # Step 5: GUARANTEE ZERO N/A & ZERO EMPTY TITLES
+    # Step 4: Guarantee clean titles & baseline fallback values
     if not meta.get('title') or meta['title'].strip() == '':
         clean_id = url.split('/')[-1].split('?')[0] if '/' in url else 'post'
         meta['title'] = f"{platform} Video ({clean_id})"
