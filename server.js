@@ -763,6 +763,7 @@ function calculatePacingProfile(camp) {
   const totalViews = Math.max(camp.total_views || 1000, 1);
   const progress = Math.min(viewsDelivered / totalViews, 1.0);
   const minViews = getServiceMin(camp.view_service, 100);
+  const remaining = Math.max(0, totalViews - viewsDelivered);
 
   // Timezone / Circadian scale (Night dip -65%, Peak surge +25%)
   let circadianMultiplier = 1.0;
@@ -772,39 +773,43 @@ function calculatePacingProfile(camp) {
     circadianMultiplier = 1.25; // Peak scrolling hours
   }
 
+  // Calculate dynamic pacing duration based on user-selected days_to_run
+  const daysToRun = Math.max(1, camp.days_to_run || 1);
+  const activeHoursPerDay = camp.peak_only ? 11 : 24;
+  const totalActiveSeconds = daysToRun * activeHoursPerDay * 3600;
+  const avgPulseSize = Math.max(minViews * 1.5, 200);
+  const estimatedTotalPulses = Math.max(5, Math.ceil(totalViews / avgPulseSize));
+  const baseTargetIntervalSecs = Math.max(900, Math.floor(totalActiveSeconds / estimatedTotalPulses));
+
   const mode = camp.delivery_mode || 'fresh_scurve';
 
   if (mode === 'turbo') {
-    const remaining = totalViews - viewsDelivered;
     const basePulse = Math.round(minViews * 4 + Math.random() * 400);
     return {
       pulseBurst: Math.max(minViews, Math.min(remaining, basePulse)),
       saveRatio: 0.006 + Math.random() * 0.003,
       commentRatio: 0.001 + Math.random() * 0.001,
       shareRatio: 0.002 + Math.random() * 0.002,
-      baseSleepSecs: Math.round(600 + Math.random() * 500), // 10-18 mins
+      baseSleepSecs: Math.round(600 + Math.random() * 400), // 10-16 mins
       stageName: 'Turbo Mode'
     };
   }
 
   if (mode === 'circadian') {
-    const remaining = totalViews - viewsDelivered;
     const basePulse = Math.round(minViews + Math.random() * 200);
     return {
       pulseBurst: Math.max(minViews, Math.min(remaining, Math.round(basePulse * circadianMultiplier))),
       saveRatio: 0.005 + Math.random() * 0.003,
       commentRatio: 0.0008 + Math.random() * 0.0006,
       shareRatio: 0.0015 + Math.random() * 0.0015,
-      baseSleepSecs: Math.round((1200 + Math.random() * 800) / circadianMultiplier), // 20-33 mins
+      baseSleepSecs: Math.round((baseTargetIntervalSecs * 1.05 + Math.random() * 300) / circadianMultiplier),
       stageName: 'Circadian Wave'
     };
   }
 
-  // DEFAULT & RECOMMENDED: 'fresh_scurve' (3-Stage Viral Growth for Fresh Clips & Content Rewards)
-  const remaining = totalViews - viewsDelivered;
+  // DEFAULT & RECOMMENDED: 'fresh_scurve' (3-Stage Viral Growth scaled by days_to_run)
   if (progress < 0.15) {
     // STAGE 1: SEED DISCOVERY PHASE (0% - 15%)
-    // Soft initial pulses with high early Save/Bookmark ratio (1.1% - 1.5%)
     const basePulse = Math.round(minViews + Math.random() * 150);
     const pulseBurst = Math.max(minViews, Math.min(remaining, Math.round(basePulse * circadianMultiplier)));
     return {
@@ -812,13 +817,12 @@ function calculatePacingProfile(camp) {
       saveRatio: 0.011 + Math.random() * 0.004,      // 1.1% - 1.5% (Early High-Trust Bookmarks)
       commentRatio: 0.0006 + Math.random() * 0.0004, // 0.06% - 0.10%
       shareRatio: 0.0010 + Math.random() * 0.0010,   // 0.10% - 0.20%
-      baseSleepSecs: Math.round((1380 + Math.random() * 540) / circadianMultiplier), // 23 - 32 mins
+      baseSleepSecs: Math.round((baseTargetIntervalSecs * 1.35 + Math.random() * 300) / circadianMultiplier),
       stageName: 'Stage 1: Seed Discovery'
     };
   } else if (progress < 0.80) {
     // STAGE 2: FYP VIRAL BREAKOUT (15% - 80%)
-    // Exponential scale bursts mimicking algorithmic push
-    const scaleFactor = 1.8 + (progress * 2.0); // Scales up as viral velocity expands
+    const scaleFactor = 1.8 + (progress * 2.0);
     const basePulse = Math.round(minViews * scaleFactor + Math.random() * 250);
     const pulseBurst = Math.max(minViews, Math.min(remaining, Math.round(basePulse * circadianMultiplier)));
     return {
@@ -826,19 +830,19 @@ function calculatePacingProfile(camp) {
       saveRatio: 0.007 + Math.random() * 0.003,      // 0.70% - 1.00%
       commentRatio: 0.0010 + Math.random() * 0.0008, // 0.10% - 0.18%
       shareRatio: 0.0035 + Math.random() * 0.0020,   // 0.35% - 0.55%
-      baseSleepSecs: Math.round((1140 + Math.random() * 480) / circadianMultiplier), // 19 - 27 mins
+      baseSleepSecs: Math.round((baseTargetIntervalSecs * 0.85 + Math.random() * 240) / circadianMultiplier),
       stageName: 'Stage 2: FYP Viral Breakout'
     };
   } else {
     // STAGE 3: PLATEAU & LONG-TAIL TAIL (80% - 100%)
-    // Soft landing, tapering smoothly to completion
     const basePulse = Math.round(minViews + Math.random() * 180);
+    const pulseBurst = remaining > 0 && remaining < minViews ? minViews : Math.max(minViews, Math.min(remaining, basePulse));
     return {
-      pulseBurst: Math.max(Math.min(remaining, minViews), Math.min(remaining, basePulse)),
+      pulseBurst,
       saveRatio: 0.005 + Math.random() * 0.002,      // 0.50% - 0.70%
       commentRatio: 0.0007 + Math.random() * 0.0005, // 0.07% - 0.12%
       shareRatio: 0.0015 + Math.random() * 0.0015,   // 0.15% - 0.30%
-      baseSleepSecs: Math.round((1440 + Math.random() * 720) / circadianMultiplier), // 24 - 36 mins
+      baseSleepSecs: Math.round((baseTargetIntervalSecs * 1.15 + Math.random() * 300) / circadianMultiplier),
       stageName: 'Stage 3: Viral Plateau'
     };
   }
@@ -924,8 +928,12 @@ async function runDripWorker(url, abortSignal) {
 
     await updateCampaignLiveStats(camp);
 
-    if (camp.views_delivered >= camp.total_views) {
-      logMsg(`🎉 Campaign COMPLETED: ${titleDisplay}`, 'success', url);
+    const minViews = getServiceMin(camp.view_service, 100);
+    const isCompleted = (camp.views_delivered >= camp.total_views) || 
+      ((camp.total_views - camp.views_delivered < minViews) && (camp.views_delivered >= camp.total_views * 0.95));
+
+    if (isCompleted) {
+      logMsg(`🎉 Campaign COMPLETED: ${titleDisplay} (${camp.views_delivered}/${camp.total_views} views delivered)`, 'success', url);
       camp.status = 'Completed';
       activeWorkers.delete(url);
       saveState();
