@@ -227,14 +227,16 @@ async function smmGetServices(forceRefresh = false) {
 }
 
 async function smmPlaceOrder(service_id, link, quantity, runs = null, interval = null, comments = null) {
-  const params = { service: service_id, link, quantity: parseInt(quantity) };
-  if (runs) params.runs = runs;
-  if (interval) params.interval = interval;
+  const params = { service: service_id, link };
+  
   if (comments) {
-    const commentStr = Array.isArray(comments) ? comments.join('\r\n') : String(comments).trim();
+    // Official Marketerum PHP spec for Custom Comments: newline-separated string
+    const commentStr = Array.isArray(comments) ? comments.join('\n') : String(comments).trim();
     params.comments = commentStr;
-    const lineCount = commentStr.split(/\r?\n/).filter(Boolean).length;
-    if (lineCount > 0) params.quantity = lineCount;
+  } else {
+    params.quantity = parseInt(quantity);
+    if (runs) params.runs = runs;
+    if (interval) params.interval = interval;
   }
 
   const data = await smmApiCall('add', params);
