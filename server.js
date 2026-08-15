@@ -773,13 +773,13 @@ function calculatePacingProfile(camp) {
     circadianMultiplier = 1.25; // Peak scrolling hours
   }
 
-  // Calculate dynamic pacing duration based on user-selected days_to_run
-  const daysToRun = Math.max(1, camp.days_to_run || 1);
+  // Calculate dynamic pacing duration based on user-selected days_to_run (supports decimals e.g. 0.5, 1.5)
+  const daysToRun = Math.max(0.04, parseFloat(camp.days_to_run) || 1.0);
   const activeHoursPerDay = camp.peak_only ? 11 : 24;
   const totalActiveSeconds = daysToRun * activeHoursPerDay * 3600;
   const avgPulseSize = Math.max(minViews * 1.5, 200);
-  const estimatedTotalPulses = Math.max(5, Math.ceil(totalViews / avgPulseSize));
-  const baseTargetIntervalSecs = Math.max(900, Math.floor(totalActiveSeconds / estimatedTotalPulses));
+  const estimatedTotalPulses = Math.max(4, Math.ceil(totalViews / avgPulseSize));
+  const baseTargetIntervalSecs = Math.max(180, Math.floor(totalActiveSeconds / estimatedTotalPulses));
 
   const mode = camp.delivery_mode || 'fresh_scurve';
 

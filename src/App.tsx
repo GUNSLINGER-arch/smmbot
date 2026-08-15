@@ -574,7 +574,7 @@ function CampaignsTab() {
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Duration (Days)</label>
-                  <input className="term-input" type="number" value={editForm.days_to_run} onChange={e => setEditForm({ ...editForm, days_to_run: e.target.value })} />
+                  <input className="term-input" type="number" step="0.1" min="0.05" placeholder="e.g. 0.5 (12h), 1.5 (36h)" value={editForm.days_to_run} onChange={e => setEditForm({ ...editForm, days_to_run: e.target.value })} />
                 </div>
               </div>
               <div className="term-field-group">
@@ -734,7 +734,7 @@ function CampaignsTab() {
               <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Duration (Days)</label>
-                  <input className="term-input" type="number" value={form.days_to_run} onChange={e => setForm({ ...form, days_to_run: e.target.value })} />
+                  <input className="term-input" type="number" step="0.1" min="0.05" placeholder="e.g. 0.5 (12h), 1.5 (36h)" value={form.days_to_run} onChange={e => setForm({ ...form, days_to_run: e.target.value })} />
                 </div>
                 <div className="term-field-group">
                   <label className="term-field-lbl">Engagement (%)</label>
