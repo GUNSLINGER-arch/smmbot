@@ -691,32 +691,47 @@ function getGroqKey() {
   return (state.groq_api_key || DEFAULT_GROQ_KEY || '').trim();
 }
 
-async function generateAiComments(title, platform = 'Instagram', count = 5) {
+async function generateAiComments(title, platform = 'Instagram', count = 5, excludeComments = []) {
   const apiKey = getGroqKey();
   const cleanTitle = (title && typeof title === 'string') ? title.trim() : 'viral reel';
   const targetCount = Math.max(1, Math.min(count || 5, 50));
+  const pastList = Array.isArray(excludeComments) ? excludeComments.filter(Boolean).slice(-40) : [];
+
+  const personas = [
+    'laughing / meme reaction / funny observation',
+    'asking a question about the audio / edit / part 2',
+    'admiring the visuals / editing style / transitions',
+    'ultra-casual Gen-Z typing / short reaction / slang',
+    'relatable banter / tagging vibe / FYP comment'
+  ];
+  const chosenAngle = personas[Math.floor(Math.random() * personas.length)];
 
   if (apiKey) {
     try {
+      const avoidNotice = pastList.length > 0
+        ? `\nPREVIOUSLY POSTED COMMENTS (DO NOT REPEAT OR GENERATE SIMILAR TO ANY OF THESE): ${JSON.stringify(pastList)}`
+        : '';
+
       const systemPrompt = `You are an API that generates realistic, casual human comments on ${platform || 'Instagram'} (TikTok / Instagram Reels).
-Output format: JSON object with key "comments" containing an array of exactly ${targetCount} strings.
-Example: {"comments": ["comment 1", "comment 2", "comment 3"]}
+Output format: JSON object with key "comments" containing an array of exactly ${targetCount} 100% UNIQUE strings.
+Example: {"comments": ["comment 1", "comment 2"]}
 
 CRITICAL HUMAN COMMENTING RULES:
 1. Content-Relevant: Directly react to or reference the topic, audio, or caption: "${cleanTitle}".
-2. Natural Slang & Vibe: Use organic internet slang naturally (e.g. "bro", "nah fr", "lowkey", "ngl", "wait", "w", "fire", "w edit", "crazy", "smh", "so real").
-3. Casual Lowercase Typing: Type mostly in lowercase without formal punctuation, like real mobile users.
-4. Random Subtle Typos: In 1 or 2 comments out of every 5, include a slight human typo or shorthand (e.g. "teh", "actaully", "ur", "sooo", "prob", "rn", "alot", "dats").
-5. Varied Styles: Mix short 2-3 word reactions ("nah this hard 😭"), short questions ("wait what audio is this??"), hype ("the edit was clean af"), and relatable banter.
-6. Zero AI Clichés: NEVER say "Great video!", "Nice content", "Love this", or formal complete sentences. No hashtags, no quotes.`;
+2. Dynamic Vibe/Angle for this batch: ${chosenAngle}.
+3. Natural Slang & Vibe: Use organic internet slang naturally (e.g. "bro", "nah fr", "lowkey", "ngl", "wait", "w", "fire", "w edit", "crazy", "smh", "so real", "ts is wild").
+4. Casual Lowercase Typing: Type mostly in lowercase without formal punctuation, like real mobile users.
+5. Random Subtle Typos: In 1 or 2 comments out of every 5, include a slight human typo or shorthand (e.g. "teh", "actaully", "ur", "sooo", "prob", "rn", "alot", "dats").
+6. STRICT UNIQUENESS: Every comment must be completely fresh, unique, and different from any previously posted comment.${avoidNotice}
+7. Zero AI Clichés: NEVER say "Great video!", "Nice content", "Love this", or formal complete sentences. No hashtags, no quotes.`;
 
       const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
         model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate ${targetCount} comments for video: "${cleanTitle}".` }
+          { role: 'user', content: `Generate ${targetCount} unique, fresh comments for video: "${cleanTitle}". Seed: ${Date.now()}_${Math.random()}` }
         ],
-        temperature: 0.88,
+        temperature: 0.95,
         response_format: { type: 'json_object' }
       }, {
         headers: {
@@ -729,7 +744,12 @@ CRITICAL HUMAN COMMENTING RULES:
       if (response.data?.choices?.[0]?.message?.content) {
         const parsed = JSON.parse(response.data.choices[0].message.content);
         if (Array.isArray(parsed.comments) && parsed.comments.length > 0) {
-          return parsed.comments.slice(0, targetCount);
+          const uniqueNew = parsed.comments
+            .map(c => String(c).trim().replace(/^["']|["']$/g, ''))
+            .filter(c => c && !pastList.includes(c));
+          if (uniqueNew.length > 0) {
+            return uniqueNew.slice(0, targetCount);
+          }
         }
       }
     } catch (err) {
@@ -737,7 +757,7 @@ CRITICAL HUMAN COMMENTING RULES:
     }
   }
 
-  // Fallback humanized comments pool if API key is missing or offline
+  // Fallback humanized comments pool with duplicate prevention
   const fallbackTemplates = [
     "wait this is actually so clean",
     "nah fr tho 😭",
@@ -748,9 +768,19 @@ CRITICAL HUMAN COMMENTING RULES:
     "sooo good actaully",
     "underrated rn",
     "who else is seeing this on their fyp 🙌",
-    "wait whats the song name??"
+    "wait whats the song name??",
+    "this deserves way more hype",
+    "teh ending caught me off guard 💀",
+    "nah im dead 😭",
+    "lowkey best reel ive seen today",
+    "cant stop replaying this ngl",
+    "the transitions are insane",
+    "bro really thought we wouldnt notice 😂",
+    "w edit as always"
   ];
-  const shuffled = fallbackTemplates.sort(() => 0.5 - Math.random());
+  const available = fallbackTemplates.filter(c => !pastList.includes(c));
+  const pool = available.length >= targetCount ? available : fallbackTemplates;
+  const shuffled = pool.sort(() => 0.5 - Math.random());
   return shuffled.slice(0, targetCount);
 }
 
@@ -1002,17 +1032,20 @@ async function runDripWorker(url, abortSignal) {
     if (camp.comment_service && camp.comments_deficit >= minComments) {
       const dispatchQty = Math.floor(camp.comments_deficit);
       
-      // Auto-generate realistic AI comments based on video title & topic
+      if (!camp.posted_comments) camp.posted_comments = [];
       let generatedComments = [];
       try {
-        generatedComments = await generateAiComments(camp.video_title, camp.platform, dispatchQty);
-        logMsg(`🤖 [AI Comments] Generated ${generatedComments.length} contextual comments for "${(camp.video_title || 'post').slice(0, 32)}..."`, 'info', url);
+        generatedComments = await generateAiComments(camp.video_title, camp.platform, dispatchQty, camp.posted_comments);
+        logMsg(`🤖 [AI Comments] Generated ${generatedComments.length} unique comments: "${generatedComments.join(' | ')}"`, 'info', url);
       } catch (e) {
         generatedComments = [];
       }
 
       const coid = await smmPlaceOrderWithRetry(camp.comment_service, url, dispatchQty, 'COMMENTS', 4, generatedComments);
       if (coid) {
+        generatedComments.forEach(c => {
+          if (!camp.posted_comments.includes(c)) camp.posted_comments.push(c);
+        });
         camp.comments_delivered = (camp.comments_delivered || 0) + dispatchQty;
         camp.comments_deficit -= dispatchQty;
         saveState();
