@@ -73,6 +73,8 @@ export interface AppConfig {
   auto_proxy?: string;
   custom_pkr_rate: number;
   has_key: boolean;
+  groq_api_key?: string;
+  has_groq_key?: boolean;
   backend_url?: string;
 }
 
@@ -217,7 +219,11 @@ const invoke = <T>(channel: string, ...args: any[]): Promise<T> => {
     case 'add_apify_key':
       return httpFetch<ApifyPoolStats>('/api/apify/add_key', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
     case 'delete_apify_key':
-      return httpFetch<ApifyPoolStats>('/api/apify/delete_key', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
+      return httpFetch<ApifyPoolStats>('/api/delete_key', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
+    case 'generate_ai_comments':
+      return httpFetch<{ ok: boolean; comments: string[] }>('/api/ai/generate_comments', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
+    case 'save_ai_config':
+      return httpFetch<{ ok: boolean; has_groq_key: boolean }>('/api/ai/config', { method: 'POST', body: JSON.stringify(args[0]) }) as Promise<T>;
     case 'window_close':
     case 'window_minimize':
     case 'window_maximize':
@@ -259,6 +265,12 @@ export const api = {
   saveConfig: (cfg: Omit<AppConfig, 'has_key'>) => invoke('save_config', cfg),
   verifyApiKey: (api_key: string, api_url: string) =>
     invoke<{ ok: boolean; balance_usd?: number; balance_pkr?: number; error?: string }>('verify_api_key', { api_key, api_url }),
+
+  // Groq AI Smart Custom Comments
+  generateAiComments: (params: { title: string; platform?: string; count?: number }) =>
+    invoke<{ ok: boolean; comments: string[] }>('generate_ai_comments', params),
+  saveAiConfig: (params: { groq_api_key: string }) =>
+    invoke<{ ok: boolean; has_groq_key: boolean }>('save_ai_config', params),
 
   // Balance
   getBalance: () => invoke<BalanceResult>('get_balance'),

@@ -226,10 +226,13 @@ async function smmGetServices(forceRefresh = false) {
   return [];
 }
 
-async function smmPlaceOrder(service_id, link, quantity, runs = null, interval = null) {
+async function smmPlaceOrder(service_id, link, quantity, runs = null, interval = null, comments = null) {
   const params = { service: service_id, link, quantity };
   if (runs) params.runs = runs;
   if (interval) params.interval = interval;
+  if (comments) {
+    params.comments = Array.isArray(comments) ? comments.join('\n') : String(comments);
+  }
 
   const data = await smmApiCall('add', params);
   if (data.error) throw new Error(data.error);
@@ -286,10 +289,10 @@ async function smmCancelOrder(order_id) {
 // ─────────────────────────────────────────────────────────────────
 //  RETRY LOOP WITH AUTOMATIC PROXY ROTATION
 // ─────────────────────────────────────────────────────────────────
-async function smmPlaceOrderWithRetry(serviceId, url, qty, typeLabel, maxAttempts = 4) {
+async function smmPlaceOrderWithRetry(serviceId, url, qty, typeLabel, maxAttempts = 4, comments = null) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const orderId = await smmPlaceOrder(serviceId, url, qty);
+      const orderId = await smmPlaceOrder(serviceId, url, qty, null, null, comments);
       logMsg(`✅ [${typeLabel}] Placed order #${orderId} for ${qty} items`, 'success', url);
       return orderId;
     } catch (err) {
@@ -596,6 +599,78 @@ function gaussianRandom(mean = 0, stdev = 1) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  GROQ AI SMART CUSTOM COMMENTS GENERATOR
+// ─────────────────────────────────────────────────────────────────
+const DEFAULT_GROQ_KEY = process.env.GROQ_API_KEY || '';
+
+function getGroqKey() {
+  return (state.groq_api_key || DEFAULT_GROQ_KEY || '').trim();
+}
+
+async function generateAiComments(title, platform = 'Instagram', count = 5) {
+  const apiKey = getGroqKey();
+  const cleanTitle = (title && typeof title === 'string') ? title.trim() : 'viral reel';
+  const targetCount = Math.max(1, Math.min(count || 5, 50));
+
+  if (apiKey) {
+    try {
+      const systemPrompt = `You are an API that generates realistic, casual human comments on ${platform || 'Instagram'} (TikTok / Instagram Reels).
+Output format: JSON object with key "comments" containing an array of exactly ${targetCount} strings.
+Example: {"comments": ["comment 1", "comment 2", "comment 3"]}
+
+CRITICAL HUMAN COMMENTING RULES:
+1. Content-Relevant: Directly react to or reference the topic, audio, or caption: "${cleanTitle}".
+2. Natural Slang & Vibe: Use organic internet slang naturally (e.g. "bro", "nah fr", "lowkey", "ngl", "wait", "w", "fire", "w edit", "crazy", "smh", "so real").
+3. Casual Lowercase Typing: Type mostly in lowercase without formal punctuation, like real mobile users.
+4. Random Subtle Typos: In 1 or 2 comments out of every 5, include a slight human typo or shorthand (e.g. "teh", "actaully", "ur", "sooo", "prob", "rn", "alot", "dats").
+5. Varied Styles: Mix short 2-3 word reactions ("nah this hard 😭"), short questions ("wait what audio is this??"), hype ("the edit was clean af"), and relatable banter.
+6. Zero AI Clichés: NEVER say "Great video!", "Nice content", "Love this", or formal complete sentences. No hashtags, no quotes.`;
+
+      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Generate ${targetCount} comments for video: "${cleanTitle}".` }
+        ],
+        temperature: 0.88,
+        response_format: { type: 'json_object' }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      if (response.data?.choices?.[0]?.message?.content) {
+        const parsed = JSON.parse(response.data.choices[0].message.content);
+        if (Array.isArray(parsed.comments) && parsed.comments.length > 0) {
+          return parsed.comments.slice(0, targetCount);
+        }
+      }
+    } catch (err) {
+      console.error('Groq AI comments generation notice:', err.message);
+    }
+  }
+
+  // Fallback humanized comments pool if API key is missing or offline
+  const fallbackTemplates = [
+    "wait this is actually so clean",
+    "nah fr tho 😭",
+    "bro cooked with this one",
+    "lowkey need part 2 asap",
+    "the audio fits so well",
+    "w post ngl",
+    "sooo good actaully",
+    "underrated rn",
+    "who else is seeing this on their fyp 🙌",
+    "wait whats the song name??"
+  ];
+  const shuffled = fallbackTemplates.sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, targetCount);
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  3-STAGE VIRAL S-CURVE & ADAPTIVE PACING CALCULATOR
 // ─────────────────────────────────────────────────────────────────
 function calculatePacingProfile(camp) {
@@ -830,11 +905,21 @@ async function runDripWorker(url, abortSignal) {
       await new Promise(r => setTimeout(r, 4000 + Math.random() * 4000));
     }
 
-    // DISPATCH COMMENTS ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
+    // DISPATCH COMMENTS ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service + AI Generation)
     const minComments = getServiceMin(camp.comment_service, 5);
     if (camp.comment_service && camp.comments_deficit >= minComments) {
       const dispatchQty = Math.floor(camp.comments_deficit);
-      const coid = await smmPlaceOrderWithRetry(camp.comment_service, url, dispatchQty, 'COMMENTS');
+      
+      // Auto-generate realistic AI comments based on video title & topic
+      let generatedComments = [];
+      try {
+        generatedComments = await generateAiComments(camp.video_title, camp.platform, dispatchQty);
+        logMsg(`🤖 [AI Comments] Generated ${generatedComments.length} contextual comments for "${(camp.video_title || 'post').slice(0, 32)}..."`, 'info', url);
+      } catch (e) {
+        generatedComments = [];
+      }
+
+      const coid = await smmPlaceOrderWithRetry(camp.comment_service, url, dispatchQty, 'COMMENTS', 4, generatedComments);
       if (coid) {
         camp.comments_delivered = (camp.comments_delivered || 0) + dispatchQty;
         camp.comments_deficit -= dispatchQty;
@@ -966,6 +1051,8 @@ function startServer() {
           api_proxy: state.api_proxy || '',
           auto_proxy: state.auto_proxy || null,
           custom_pkr_rate: state.custom_pkr_rate || 297,
+          groq_api_key: state.groq_api_key || DEFAULT_GROQ_KEY || '',
+          has_groq_key: Boolean(state.groq_api_key || DEFAULT_GROQ_KEY),
           has_key: Boolean(state.api_key),
           services: state.services || [],
           campaigns: state.campaigns || {},
@@ -1170,6 +1257,25 @@ function startServer() {
               }
             }
             res.end(JSON.stringify({ ok: false, error: 'No recent view order to refill' }));
+            return;
+          }
+
+          if (pathname === '/api/ai/generate_comments') {
+            const title = data.title || data.caption || '';
+            const platform = data.platform || 'Instagram';
+            const count = parseInt(data.count) || 5;
+            const comments = await generateAiComments(title, platform, count);
+            res.end(JSON.stringify({ ok: true, comments }));
+            return;
+          }
+
+          if (pathname === '/api/ai/config') {
+            if (data.groq_api_key !== undefined) {
+              state.groq_api_key = data.groq_api_key.trim();
+              saveState();
+              logMsg('🤖 Groq AI comments configuration updated', 'success');
+            }
+            res.end(JSON.stringify({ ok: true, has_groq_key: Boolean(state.groq_api_key || DEFAULT_GROQ_KEY) }));
             return;
           }
 

@@ -1400,8 +1400,207 @@ function ConfigTab() {
         </button>
       </div>
 
+      {/* Groq AI Smart Custom Comments Card */}
+      <GroqAiCommentsCard />
+
       {/* Apify Scraping Cloud Pool Card */}
       <ApifyPoolCard />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  GROQ AI SMART CUSTOM COMMENTS SECTION
+// ─────────────────────────────────────────────────────────────────
+function GroqAiCommentsCard() {
+  const { config, addToast, refreshData } = useApp();
+  const [groqKey, setGroqKey] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
+  const [sampleTitle, setSampleTitle] = useState('follow along as we turn our book series into an animated series #scifi #animation');
+  const [samplePlatform, setSamplePlatform] = useState('Instagram');
+  const [sampleCount, setSampleCount] = useState('5');
+  const [generating, setGenerating] = useState(false);
+  const [previewComments, setPreviewComments] = useState<string[]>([
+    "lowkey hyped for this",
+    "wait whats the first ep about??",
+    "sooo down to see teh characters come to life",
+    "ngl the animation style is fire",
+    "bro this is gonna be alot better than i expected rn"
+  ]);
+
+  useEffect(() => {
+    if (config?.groq_api_key) {
+      setGroqKey(config.groq_api_key);
+    }
+  }, [config]);
+
+  const handleSaveGroqKey = async () => {
+    setSavingKey(true);
+    try {
+      await api.saveAiConfig({ groq_api_key: groqKey.trim() });
+      addToast('Groq AI API Key saved & active!', 'success');
+      refreshData();
+    } catch (e: any) {
+      addToast(e.message || 'Failed to save Groq key', 'error');
+    }
+    setSavingKey(false);
+  };
+
+  const handleTestGenerate = async () => {
+    if (!sampleTitle.trim()) {
+      addToast('Enter a sample video title or caption first', 'info');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const res = await api.generateAiComments({
+        title: sampleTitle.trim(),
+        platform: samplePlatform,
+        count: parseInt(sampleCount) || 5
+      });
+      if (res && res.ok && Array.isArray(res.comments)) {
+        setPreviewComments(res.comments);
+        addToast(`Generated ${res.comments.length} humanized comments!`, 'success');
+      } else {
+        addToast('Failed to generate comments', 'error');
+      }
+    } catch (e: any) {
+      addToast(e.message || 'Generation error', 'error');
+    }
+    setGenerating(false);
+  };
+
+  const copyToClipboard = () => {
+    if (!previewComments.length) return;
+    navigator.clipboard.writeText(previewComments.join('\n'));
+    addToast('Comments copied to clipboard!', 'success');
+  };
+
+  return (
+    <div className="term-card glass-card--glow" style={{ marginTop: '16px' }}>
+      <div className="term-card-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '18px' }}>🤖</span>
+          <span className="term-card-title">Groq AI Smart Comments Engine</span>
+        </div>
+        <span className="term-badge term-badge-green" style={{ fontSize: '11px' }}>
+          Llama 3.3 70B Active
+        </span>
+      </div>
+
+      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+        Automatically generates context-aware, human-sounding comments for your videos using Groq's high-speed Llama 3.3. Uses internet slang, lowercase typing, natural excitement, and random human typos.
+      </p>
+
+      {/* Groq API Key Config */}
+      <div className="term-field-group">
+        <label className="term-field-lbl">Groq API Key (Llama 3.3 70B)</label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            className="term-input"
+            type="password"
+            placeholder="gsk_..."
+            value={groqKey}
+            onChange={(e) => setGroqKey(e.target.value)}
+          />
+          <button
+            className="term-btn term-btn-cyan term-btn-sm"
+            onClick={handleSaveGroqKey}
+            disabled={savingKey}
+            style={{ flexShrink: 0 }}
+          >
+            {savingKey ? 'Saving...' : 'Save Groq Key'}
+          </button>
+        </div>
+      </div>
+
+      {/* Live AI Generator Playground */}
+      <div style={{
+        padding: '14px',
+        background: 'var(--bg-elevated)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: '12px',
+        marginTop: '14px'
+      }}>
+        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>✨ Test AI Generator Playground</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Real-time Preview</span>
+        </div>
+
+        <div className="term-field-group">
+          <label className="term-field-lbl">Sample Video Title / Caption</label>
+          <input
+            className="term-input"
+            placeholder="e.g. follow along as we turn our book series into an animated series..."
+            value={sampleTitle}
+            onChange={(e) => setSampleTitle(e.target.value)}
+          />
+        </div>
+
+        <div className="modal-grid-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '12px' }}>
+          <div className="term-field-group" style={{ marginBottom: 0 }}>
+            <label className="term-field-lbl">Platform Style</label>
+            <select className="term-input" value={samplePlatform} onChange={(e) => setSamplePlatform(e.target.value)}>
+              <option value="Instagram">📸 Instagram Reels</option>
+              <option value="TikTok">🎵 TikTok FYP</option>
+            </select>
+          </div>
+          <div className="term-field-group" style={{ marginBottom: 0 }}>
+            <label className="term-field-lbl">Quantity</label>
+            <select className="term-input" value={sampleCount} onChange={(e) => setSampleCount(e.target.value)}>
+              <option value="3">3 Comments</option>
+              <option value="5">5 Comments</option>
+              <option value="10">10 Comments</option>
+              <option value="15">15 Comments</option>
+            </select>
+          </div>
+          <button
+            className="term-btn term-btn-green term-btn-sm"
+            onClick={handleTestGenerate}
+            disabled={generating}
+            style={{ height: '42px', padding: '0 16px' }}
+          >
+            {generating ? 'Writing...' : '⚡ Generate Comments'}
+          </button>
+        </div>
+
+        {/* Output List */}
+        {previewComments.length > 0 && (
+          <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Generated Output ({previewComments.length})
+              </span>
+              <button className="term-btn term-btn-sm" onClick={copyToClipboard} style={{ fontSize: '11px', padding: '4px 10px' }}>
+                📋 Copy All
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {previewComments.map((c, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: 'var(--text-primary)',
+                    fontFamily: 'var(--font-sans)'
+                  }}
+                >
+                  <span style={{ color: 'var(--accent-cyan)', fontSize: '11px', flexShrink: 0 }}>#{idx + 1}</span>
+                  <span style={{ flex: 1 }}>{c}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
