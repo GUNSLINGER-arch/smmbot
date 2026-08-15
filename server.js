@@ -588,6 +588,13 @@ function getServiceMin(serviceId, defaultMin = 1) {
   return defaultMin;
 }
 
+function gaussianRandom(mean = 0, stdev = 1) {
+  let u = 1 - Math.random();
+  let v = Math.random();
+  let z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  return z * stdev + mean;
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  3-STAGE VIRAL S-CURVE & ADAPTIVE PACING CALCULATOR
 // ─────────────────────────────────────────────────────────────────
@@ -781,14 +788,17 @@ async function runDripWorker(url, abortSignal) {
         camp.last_order_timestamp = new Date().toISOString();
         camp.views_delivered += pulseBurst;
 
-        // Dynamic Gaussian jitter on user engagement rate (±0.25% variance)
+        // Dynamic Gaussian noise on user engagement rate (Human "Messiness")
         const baseRate = (camp.engagement_rate || 2.8) / 100;
-        const jitteredRate = Math.max(0.015, baseRate + (Math.random() * 0.005 - 0.0025));
+        const jitteredLikesRate = Math.max(0.012, Math.min(0.065, baseRate + gaussianRandom(0, 0.0035)));
+        const jitteredCommentsRate = Math.max(0.0003, profile.commentRatio * (1 + gaussianRandom(0, 0.20)));
+        const jitteredSharesRate = Math.max(0.0005, profile.shareRatio * (1 + gaussianRandom(0, 0.25)));
+        const jitteredSavesRate = Math.max(0.002, profile.saveRatio * (1 + gaussianRandom(0, 0.18)));
 
-        camp.likes_deficit += pulseBurst * jitteredRate;
-        camp.comments_deficit += pulseBurst * profile.commentRatio;
-        camp.shares_deficit += pulseBurst * profile.shareRatio;
-        camp.saves_deficit += pulseBurst * profile.saveRatio;
+        camp.likes_deficit += pulseBurst * jitteredLikesRate;
+        camp.comments_deficit += pulseBurst * jitteredCommentsRate;
+        camp.shares_deficit += pulseBurst * jitteredSharesRate;
+        camp.saves_deficit += pulseBurst * jitteredSavesRate;
 
         saveState();
         broadcastEvent('campaign_update', url);
@@ -817,6 +827,7 @@ async function runDripWorker(url, abortSignal) {
         saveState();
         broadcastEvent('campaign_update', url);
       }
+      await new Promise(r => setTimeout(r, 4000 + Math.random() * 4000));
     }
 
     // DISPATCH COMMENTS ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
@@ -830,6 +841,7 @@ async function runDripWorker(url, abortSignal) {
         saveState();
         broadcastEvent('campaign_update', url);
       }
+      await new Promise(r => setTimeout(r, 4000 + Math.random() * 4000));
     }
 
     // DISPATCH SHARES ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
@@ -843,6 +855,7 @@ async function runDripWorker(url, abortSignal) {
         saveState();
         broadcastEvent('campaign_update', url);
       }
+      await new Promise(r => setTimeout(r, 4000 + Math.random() * 4000));
     }
 
     // DISPATCH SAVES ONCE DEFICIT >= MINIMUM (Dynamic from Panel Service)
