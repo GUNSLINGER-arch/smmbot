@@ -239,21 +239,28 @@ const listen = <T>(event: string, callback: (payload: T) => void) => {
     return Promise.resolve(() => {});
   }
 
-  // Web Realtime SSE stream setup
-  if (event === 'log') {
-    try {
-      const baseUrl = getBackendUrl();
-      const sse = new EventSource(`${baseUrl}/api/events`);
-      sse.onmessage = (e) => {
-        try {
-          const parsed = JSON.parse(e.data);
-          if (parsed.type === 'log') callback(parsed.data);
-        } catch (err) {}
-      };
-      return Promise.resolve(() => sse.close());
-    } catch (e) {}
+  // Web Realtime SSE stream setup for all events (log, campaign_update, campaign_complete, apify_stats)
+  try {
+    const baseUrl = getBackendUrl();
+    const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const sseUrl = (isHttpsPage && baseUrl.startsWith('http://')) ? '/api/events' : `${baseUrl}/api/events`;
+    const sse = new EventSource(sseUrl);
+
+    sse.onmessage = (e) => {
+      try {
+        const parsed = JSON.parse(e.data);
+        if (parsed.type === event) {
+          callback(parsed.data);
+        }
+      } catch (err) {}
+    };
+
+    return Promise.resolve(() => {
+      try { sse.close(); } catch (e) {}
+    });
+  } catch (e) {
+    return Promise.resolve(() => {});
   }
-  return Promise.resolve(() => {});
 };
 
 // ──────────────────────────────────────────────────

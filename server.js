@@ -449,6 +449,72 @@ async function getApifyPoolStats(forceRefresh = false) {
   return cachedApifyStats;
 }
 
+let apifyKeyIndex = 0;
+function getNextApifyKey() {
+  const keys = readApifyKeys();
+  if (!keys || keys.length === 0) return null;
+  if (cachedApifyStats && Array.isArray(cachedApifyStats.keys)) {
+    const validKeys = cachedApifyStats.keys.filter(k => k.status === 'active' && k.remaining_usd > 0.05);
+    if (validKeys.length > 0) {
+      apifyKeyIndex = (apifyKeyIndex + 1) % validKeys.length;
+      return validKeys[apifyKeyIndex].key;
+    }
+  }
+  apifyKeyIndex = (apifyKeyIndex + 1) % keys.length;
+  return keys[apifyKeyIndex];
+}
+
+async function fetchApifyMetadata(url, platform = 'Instagram') {
+  const token = getNextApifyKey();
+  if (!token) return null;
+
+  try {
+    const isTikTok = url.includes('tiktok.com') || platform === 'TikTok';
+    const actorId = isTikTok ? 'clockworks~free-tiktok-scraper' : 'apify~instagram-reel-scraper';
+    const input = isTikTok 
+      ? { postURLs: [url], commentsPerPost: 0 }
+      : { directUrls: [url], resultsLimit: 1 };
+
+    const apifyUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${token}`;
+    const res = await axios.post(apifyUrl, input, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 25000
+    });
+
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      const item = res.data[0];
+      if (isTikTok) {
+        return {
+          title: item.text || item.desc || '',
+          author: item.authorMeta?.name || item.author || '',
+          views: item.playCount !== undefined ? parseInt(item.playCount) : null,
+          likes: item.diggCount !== undefined ? parseInt(item.diggCount) : 0,
+          comments: item.commentCount !== undefined ? parseInt(item.commentCount) : 0,
+          shares: item.shareCount !== undefined ? parseInt(item.shareCount) : 0,
+          saves: item.collectCount !== undefined ? parseInt(item.collectCount) : 0,
+          source: 'apify_api'
+        };
+      } else {
+        return {
+          title: item.caption || item.title || '',
+          author: item.ownerUsername || item.username || '',
+          views: (item.videoPlayCount || item.videoViewCount || item.playCount || item.viewsCount) !== undefined
+            ? parseInt(item.videoPlayCount || item.videoViewCount || item.playCount || item.viewsCount)
+            : null,
+          likes: item.likesCount !== undefined ? parseInt(item.likesCount) : 0,
+          comments: item.commentsCount !== undefined ? parseInt(item.commentsCount) : 0,
+          shares: item.sharesCount !== undefined ? parseInt(item.sharesCount) : 0,
+          saves: item.savedCount !== undefined ? parseInt(item.savedCount) : 0,
+          source: 'apify_api'
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Apify scraper notice:', err.message);
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  METADATA SCRAPER
 // ─────────────────────────────────────────────────────────────────
@@ -493,21 +559,27 @@ function fetchPythonMetadata(url, platform, forcedProxy = null) {
 }
 
 async function fetchLiveMetadata(url, platform) {
-  let pyMeta = await fetchPythonMetadata(url, platform, getProxy());
+  // 1. Try Apify API Multi-Account Scraper First (Fastest & Most Reliable)
+  let liveMeta = await fetchApifyMetadata(url, platform);
 
-  if (!pyMeta) {
-    pyMeta = { title: '', author: '', views: null, likes: null, comments: null, shares: null, saves: null, source: 'js-fallback' };
+  // 2. Fallback to Python Scraper Engine if Apify failed or timed out
+  if (!liveMeta || liveMeta.views === null) {
+    liveMeta = await fetchPythonMetadata(url, platform, getProxy());
   }
 
-  // JS Fallback attempt if python scraper missed title/views
-  if (!pyMeta.title || pyMeta.views === null) {
+  if (!liveMeta) {
+    liveMeta = { title: '', author: '', views: null, likes: null, comments: null, shares: null, saves: null, source: 'js-fallback' };
+  }
+
+  // 3. JS Fallback attempt if both missed title
+  if (!liveMeta.title || liveMeta.views === null) {
     try {
       if (url.includes('tiktok.com') || platform === 'TikTok') {
         const oeUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
         const res = await axios.get(oeUrl, getRequestConfig());
         if (res.data) {
-          if (!pyMeta.title) pyMeta.title = res.data.title || '';
-          if (!pyMeta.author) pyMeta.author = res.data.author_name || '';
+          if (!liveMeta.title) liveMeta.title = res.data.title || '';
+          if (!liveMeta.author) liveMeta.author = res.data.author_name || '';
         }
       }
     } catch (e) {}
@@ -522,14 +594,14 @@ async function fetchLiveMetadata(url, platform) {
       }
     } catch (e) {}
   }
-  const title = (pyMeta.title && String(pyMeta.title).trim()) ? String(pyMeta.title).trim() : `${platform || 'Social'} Video (${cleanId})`;
-  const author = (pyMeta.author && String(pyMeta.author).trim()) ? String(pyMeta.author).trim() : 'creator';
+  const title = (liveMeta.title && String(liveMeta.title).trim()) ? String(liveMeta.title).trim() : `${platform || 'Social'} Video (${cleanId})`;
+  const author = (liveMeta.author && String(liveMeta.author).trim()) ? String(liveMeta.author).trim() : 'creator';
 
-  const views = pyMeta.views !== null ? parseInt(pyMeta.views) : 0;
-  const likes = pyMeta.likes !== null ? parseInt(pyMeta.likes) : Math.max(0, Math.floor(views * 0.028));
-  const comments = pyMeta.comments !== null ? parseInt(pyMeta.comments) : Math.max(0, Math.floor(views * 0.0010));
-  const shares = pyMeta.shares !== null ? parseInt(pyMeta.shares) : Math.max(0, Math.floor(views * 0.0012));
-  const saves = pyMeta.saves !== null ? parseInt(pyMeta.saves) : Math.max(0, Math.floor(views * 0.0045));
+  const views = liveMeta.views !== null ? parseInt(liveMeta.views) : 0;
+  const likes = liveMeta.likes !== null ? parseInt(liveMeta.likes) : Math.max(0, Math.floor(views * 0.028));
+  const comments = liveMeta.comments !== null ? parseInt(liveMeta.comments) : Math.max(0, Math.floor(views * 0.0010));
+  const shares = liveMeta.shares !== null ? parseInt(liveMeta.shares) : Math.max(0, Math.floor(views * 0.0012));
+  const saves = liveMeta.saves !== null ? parseInt(liveMeta.saves) : Math.max(0, Math.floor(views * 0.0045));
 
   // Trigger async Apify pool balance refresh in background after each scrape run
   getApifyPoolStats(true).then(stats => broadcastEvent('apify_stats', stats)).catch(() => {});
@@ -542,7 +614,7 @@ async function fetchLiveMetadata(url, platform) {
     comments,
     shares,
     saves,
-    source: pyMeta.source || 'scraper-engine'
+    source: liveMeta.source || 'scraper-engine'
   };
 }
 
@@ -904,7 +976,7 @@ async function runDripWorker(url, abortSignal) {
     const currentHour = new Date().getHours();
 
     if (camp.peak_only) {
-      if (currentHour < 12 || currentHour > 23) {
+      if (currentHour < 12 || currentHour >= 23) {
         logMsg(`🌙 Peak-Hours Mode active — sleeping until peak window (12PM - 11PM)`, 'info', url);
         for (let s = 0; s < 1800; s++) {
           if (abortSignal.aborted) {
@@ -930,12 +1002,22 @@ async function runDripWorker(url, abortSignal) {
           logMsg(`🔍 Live Order #${camp.last_view_order} Status: [${status}] (${(elapsedMs / 60000).toFixed(0)}m ago)`, 'info', url);
 
           if (status === 'Completed') {
-            camp.last_view_order = null; // Clean completion, ready for next pulse
+            camp.last_view_order = null;
+            camp.last_view_order_qty = 0;
           } else if (status === 'Partial') {
             logMsg(`🔄 Order #${camp.last_view_order} reported Partial delivery by panel — syncing deficit pool...`, 'info', url);
             camp.last_view_order = null;
+            camp.last_view_order_qty = 0;
           } else if (status === 'Canceled') {
             logMsg(`⚠️ Order #${camp.last_view_order} was Canceled by SMM panel`, 'warn', url);
+            if (camp.last_view_order_qty) {
+              camp.views_delivered = Math.max(0, camp.views_delivered - camp.last_view_order_qty);
+              camp.likes_deficit = Math.max(0, camp.likes_deficit - (camp.last_view_order_likes_added || 0));
+              camp.comments_deficit = Math.max(0, camp.comments_deficit - (camp.last_view_order_comments_added || 0));
+              camp.shares_deficit = Math.max(0, camp.shares_deficit - (camp.last_view_order_shares_added || 0));
+              camp.saves_deficit = Math.max(0, camp.saves_deficit - (camp.last_view_order_saves_added || 0));
+              camp.last_view_order_qty = 0;
+            }
             if (camp.backup_view_service && camp.backup_view_service !== camp.view_service) {
               logMsg(`🛡️ [Auto-Failover] Switching from Service #${camp.view_service} to Backup Service #${camp.backup_view_service}!`, 'warn', url);
               camp.view_service = camp.backup_view_service;
@@ -943,6 +1025,14 @@ async function runDripWorker(url, abortSignal) {
             camp.last_view_order = null;
           } else if ((status === 'Pending' || status === 'In progress' || status === 'Processing') && elapsedMs > 20 * 60 * 1000) {
             logMsg(`⚠️ Order #${camp.last_view_order} stuck in [${status}] for >20 mins!`, 'warn', url);
+            if (camp.last_view_order_qty) {
+              camp.views_delivered = Math.max(0, camp.views_delivered - camp.last_view_order_qty);
+              camp.likes_deficit = Math.max(0, camp.likes_deficit - (camp.last_view_order_likes_added || 0));
+              camp.comments_deficit = Math.max(0, camp.comments_deficit - (camp.last_view_order_comments_added || 0));
+              camp.shares_deficit = Math.max(0, camp.shares_deficit - (camp.last_view_order_shares_added || 0));
+              camp.saves_deficit = Math.max(0, camp.saves_deficit - (camp.last_view_order_saves_added || 0));
+              camp.last_view_order_qty = 0;
+            }
             if (camp.backup_view_service && camp.backup_view_service !== camp.view_service) {
               try { await smmCancelOrder(camp.last_view_order); } catch (e) {}
               logMsg(`🛡️ [Auto-Failover] Switching to Backup View Service #${camp.backup_view_service}`, 'warn', url);
@@ -960,7 +1050,7 @@ async function runDripWorker(url, abortSignal) {
 
     const minViews = getServiceMin(camp.view_service, 100);
     const isCompleted = (camp.views_delivered >= camp.total_views) || 
-      ((camp.total_views - camp.views_delivered < minViews) && (camp.views_delivered >= camp.total_views * 0.95));
+      (camp.total_views - camp.views_delivered < minViews);
 
     if (isCompleted) {
       logMsg(`🎉 Campaign COMPLETED: ${titleDisplay} (${camp.views_delivered}/${camp.total_views} views delivered)`, 'success', url);
@@ -983,7 +1073,7 @@ async function runDripWorker(url, abortSignal) {
       if (void_id) {
         camp.last_view_order = void_id;
         camp.last_order_timestamp = new Date().toISOString();
-        camp.views_delivered += pulseBurst;
+        camp.last_view_order_qty = pulseBurst;
 
         // Dynamic Gaussian noise on user engagement rate (Human "Messiness")
         const baseRate = (camp.engagement_rate || 2.8) / 100;
@@ -992,10 +1082,16 @@ async function runDripWorker(url, abortSignal) {
         const jitteredSharesRate = Math.max(0.0005, profile.shareRatio * (1 + gaussianRandom(0, 0.25)));
         const jitteredSavesRate = Math.max(0.002, profile.saveRatio * (1 + gaussianRandom(0, 0.18)));
 
-        camp.likes_deficit += pulseBurst * jitteredLikesRate;
-        camp.comments_deficit += pulseBurst * jitteredCommentsRate;
-        camp.shares_deficit += pulseBurst * jitteredSharesRate;
-        camp.saves_deficit += pulseBurst * jitteredSavesRate;
+        camp.last_view_order_likes_added = pulseBurst * jitteredLikesRate;
+        camp.last_view_order_comments_added = pulseBurst * jitteredCommentsRate;
+        camp.last_view_order_shares_added = pulseBurst * jitteredSharesRate;
+        camp.last_view_order_saves_added = pulseBurst * jitteredSavesRate;
+
+        camp.views_delivered += pulseBurst;
+        camp.likes_deficit += camp.last_view_order_likes_added;
+        camp.comments_deficit += camp.last_view_order_comments_added;
+        camp.shares_deficit += camp.last_view_order_shares_added;
+        camp.saves_deficit += camp.last_view_order_saves_added;
 
         saveState();
         broadcastEvent('campaign_update', url);
