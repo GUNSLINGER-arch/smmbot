@@ -542,29 +542,108 @@ async function fetchLiveMetadata(url, platform) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  STEALTH DRIP WORKER LOOP (WITH CIRCADIAN WAVE & DEFICIT POOL)
+// ─────────────────────────────────────────────────────────────────
+//  STEALTH DRIP WORKER LOOP (WITH OVER-DELIVERY GUARD & DEFICIT POOL)
 // ─────────────────────────────────────────────────────────────────
 async function updateCampaignLiveStats(camp) {
   try {
     const meta = await fetchLiveMetadata(camp.url, camp.platform);
     const currentViews = meta.views;
     const currentLikes = meta.likes;
+    const currentComments = meta.comments;
+    const currentShares = meta.shares;
+    const currentSaves = meta.saves;
 
     if (meta.title && !camp.video_title) camp.video_title = meta.title;
     if (meta.author && !camp.video_author) camp.video_author = meta.author;
 
+    // Initialize baseline numbers on first scrape
     if (camp.start_views === undefined || camp.start_views === null) {
       camp.start_views = currentViews !== null ? currentViews : 0;
     }
     if (camp.start_likes === undefined || camp.start_likes === null) {
       camp.start_likes = currentLikes !== null ? currentLikes : 0;
     }
+    if (camp.start_comments === undefined || camp.start_comments === null) {
+      camp.start_comments = currentComments !== null ? currentComments : 0;
+    }
+    if (camp.start_shares === undefined || camp.start_shares === null) {
+      camp.start_shares = currentShares !== null ? currentShares : 0;
+    }
+    if (camp.start_saves === undefined || camp.start_saves === null) {
+      camp.start_saves = currentSaves !== null ? currentSaves : 0;
+    }
 
-    if (currentViews !== null && camp.start_views > 0) {
-      const actualViewsDelivered = Math.max(0, currentViews - camp.start_views);
-      if (actualViewsDelivered > camp.views_delivered) {
-        camp.views_delivered = actualViewsDelivered;
+    // 1. Calculate actual real-world delivered gains
+    const liveViewsGain = Math.max(0, (currentViews || 0) - (camp.start_views || 0));
+    const liveLikesGain = Math.max(0, (currentLikes || 0) - (camp.start_likes || 0));
+    const liveCommentsGain = Math.max(0, (currentComments || 0) - (camp.start_comments || 0));
+    const liveSharesGain = Math.max(0, (currentShares || 0) - (camp.start_shares || 0));
+    const liveSavesGain = Math.max(0, (currentSaves || 0) - (camp.start_saves || 0));
+
+    // 2. Sync delivered metrics with ground truth if live gain is higher
+    if (liveViewsGain > (camp.views_delivered || 0)) {
+      camp.views_delivered = liveViewsGain;
+    }
+    if (liveLikesGain > (camp.likes_delivered || 0)) {
+      camp.likes_delivered = liveLikesGain;
+    }
+    if (liveCommentsGain > (camp.comments_delivered || 0)) {
+      camp.comments_delivered = liveCommentsGain;
+    }
+    if (liveSharesGain > (camp.shares_delivered || 0)) {
+      camp.shares_delivered = liveSharesGain;
+    }
+    if (liveSavesGain > (camp.saves_delivered || 0)) {
+      camp.saves_delivered = liveSavesGain;
+    }
+
+    // 3. OVER-DELIVERY AUTO-REBALANCER:
+    // Compute target ratios for current views count to prevent any metric inflation
+    const currentDeliveredViews = Math.max(camp.views_delivered || 0, 100);
+    const targetLikes = Math.floor(currentDeliveredViews * ((camp.engagement_rate || 3.5) / 100));
+    const targetComments = Math.floor(currentDeliveredViews * 0.0020);
+    const targetShares = Math.floor(currentDeliveredViews * 0.0035);
+    const targetSaves = Math.floor(currentDeliveredViews * 0.0060);
+
+    // Likes Over-Delivery Guard
+    if ((camp.likes_delivered || 0) >= targetLikes) {
+      if (camp.likes_deficit > 0) {
+        logMsg(`🛡️ [Over-Delivery Guard] Live likes (${camp.likes_delivered}) meet/exceed target (${targetLikes}) — auto-locking likes deficit to 0`, 'info', camp.url);
+        camp.likes_deficit = 0;
       }
+    } else {
+      camp.likes_deficit = Math.min(camp.likes_deficit || 0, targetLikes - (camp.likes_delivered || 0));
+    }
+
+    // Comments Over-Delivery Guard
+    if ((camp.comments_delivered || 0) >= targetComments) {
+      if (camp.comments_deficit > 0) {
+        logMsg(`🛡️ [Over-Delivery Guard] Live comments (${camp.comments_delivered}) meet target (${targetComments}) — pausing comment orders`, 'info', camp.url);
+        camp.comments_deficit = 0;
+      }
+    } else {
+      camp.comments_deficit = Math.min(camp.comments_deficit || 0, targetComments - (camp.comments_delivered || 0));
+    }
+
+    // Shares Over-Delivery Guard
+    if ((camp.shares_delivered || 0) >= targetShares) {
+      if (camp.shares_deficit > 0) {
+        logMsg(`🛡️ [Over-Delivery Guard] Live shares (${camp.shares_delivered}) exceed target (${targetShares}) — pausing share orders`, 'info', camp.url);
+        camp.shares_deficit = 0;
+      }
+    } else {
+      camp.shares_deficit = Math.min(camp.shares_deficit || 0, targetShares - (camp.shares_delivered || 0));
+    }
+
+    // Saves Over-Delivery Guard
+    if ((camp.saves_delivered || 0) >= targetSaves) {
+      if (camp.saves_deficit > 0) {
+        logMsg(`🛡️ [Over-Delivery Guard] Live saves (${camp.saves_delivered}) exceed target (${targetSaves}) — pausing save orders`, 'info', camp.url);
+        camp.saves_deficit = 0;
+      }
+    } else {
+      camp.saves_deficit = Math.min(camp.saves_deficit || 0, targetSaves - (camp.saves_delivered || 0));
     }
 
     if (!state.analytics[camp.url]) state.analytics[camp.url] = [];
