@@ -748,8 +748,8 @@ async function runDripWorker(url, abortSignal) {
               camp.view_service = camp.backup_view_service;
             }
             camp.last_view_order = null;
-          } else if ((status === 'Pending' || status === 'In progress' || status === 'Processing') && elapsedMs > 45 * 60 * 1000) {
-            logMsg(`⚠️ Order #${camp.last_view_order} stuck in [${status}] for >45 mins!`, 'warn', url);
+          } else if ((status === 'Pending' || status === 'In progress' || status === 'Processing') && elapsedMs > 20 * 60 * 1000) {
+            logMsg(`⚠️ Order #${camp.last_view_order} stuck in [${status}] for >20 mins!`, 'warn', url);
             if (camp.backup_view_service && camp.backup_view_service !== camp.view_service) {
               try { await smmCancelOrder(camp.last_view_order); } catch (e) {}
               logMsg(`🛡️ [Auto-Failover] Switching to Backup View Service #${camp.backup_view_service}`, 'warn', url);
